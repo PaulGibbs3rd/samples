@@ -28,4 +28,4 @@ You can import the component directly from GitHub Pages:
 <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.4.0/calcite.css" />
 
 <!-- Print Tool Web Component -->
-<script type="module" src="https://raw.githubusercontent.com/PaulGibbs3rd/samples/refs/heads/main/screenshotMapComponent/calcite-panel-print-tool.js"></script>
+<script type="module" src="https://paulgibbs3rd.github.io/samples/screenshotMapComponent/calcite-panel-print-tool.js"></script>
