@@ -3,8 +3,17 @@ export class CalcitePanelPrintTool extends HTMLElement {
   constructor() {
     super();
     this.expand = null;
+    this.screenshotTitle = "🗺️ My Custom Map Title"; // Default value
+  }
+  static get observedAttributes() {
+    return ["screenshot-title"];
   }
 
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === "screenshot-title") {
+      this.screenshotTitle = newValue || "🗺️ My Custom Map Title";
+    }
+  }
   connectedCallback() {
     if (this.initialized) return;
     this.initialized = true;
