@@ -18,6 +18,12 @@ export class CalcitePanelPrintTool extends HTMLElement {
     if (this.initialized) return;
     this.initialized = true;
 
+   // ✅ Ensure initial attribute is read and assigned
+    const initialTitle = this.getAttribute("screenshot-title");
+    if (initialTitle) {
+      this.screenshotTitle = initialTitle;
+    }
+    
     const panel = document.createElement("calcite-panel");
     panel.heading = "Print Map";
 
@@ -50,7 +56,7 @@ export class CalcitePanelPrintTool extends HTMLElement {
         ctx.drawImage(image, 0, 0);
         ctx.fillStyle = "black";
         ctx.font = "20px sans-serif";
-        ctx.fillText("🗺️ My Custom Map Title", 20, 30);
+        ctx.fillText(this.screenshotTitle, 20, 30); // ✅ Use dynamic title
         const dateStr = new Date().toLocaleDateString();
         ctx.fillText(`📅 ${dateStr}`, 20, canvas.height - 30);
         ctx.fillText(`Scale 1:${Math.round(view.scale)}`, 20, canvas.height - 60);
