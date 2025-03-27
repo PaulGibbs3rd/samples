@@ -50,7 +50,7 @@ export class CalcitePanelPrintTool extends HTMLElement {
       const image = new Image();
       image.src = screenshot.dataUrl;
 
-      image.onload = function () {
+      image.onload = () => {
         canvas.width = image.width;
         canvas.height = image.height;
         ctx.drawImage(image, 0, 0);
