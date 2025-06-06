@@ -6,7 +6,8 @@
     <title>Map Components Vite Sample</title>
     <link rel="icon" href="data:;base64,=" />
 
-        <link
+    <!-- Calcite externals (OK) -->
+    <link
       rel="stylesheet"
       href="https://js.arcgis.com/calcite-components/3.2.1/calcite.css"
     />
@@ -14,22 +15,36 @@
       type="module"
       src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"
     ></script>
-    <script type="module" crossorigin src="./assets/index-HvZUpAiV.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CknZVD3U.css">
+
+    <!-- ⬇️ FIX: pull JS/CSS from view-extent/assets, not from site root ⬇️ -->
+    <script
+      type="module"
+      crossorigin
+      src="./assets/index-HvZUpAiV.js"
+    ></script>
+    <link
+      rel="stylesheet"
+      crossorigin
+      href="./assets/index-CknZVD3U.css"
+    />
   </head>
   <body>
-    <arcgis-map id="myMap" item-id="d5dda743788a4b0688fe48f43ae7beb9">
-            <arcgis-expand close-on-esc position="bottom-right" placement="left-end" mode="floating">
+    <arcgis-map
+      id="myMap"
+      item-id="d5dda743788a4b0688fe48f43ae7beb9"
+    >
+      <arcgis-expand
+        close-on-esc
+        position="bottom-right"
+        placement="left-end"
+        mode="floating"
+      >
         <arcgis-placement>
           <extent-expand></extent-expand>
         </arcgis-placement>
       </arcgis-expand>
       <arcgis-search position="top-right"></arcgis-search>
       <arcgis-legend position="bottom-left"></arcgis-legend>
-
-      
-
     </arcgis-map>
-
   </body>
 </html>
