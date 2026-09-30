@@ -26,6 +26,12 @@ export interface EditorElements {
   previewButton: HTMLButtonElement;
   applyButton: HTMLButtonElement;
   cancelButton: HTMLButtonElement;
+  translateXInput: HTMLInputElement;
+  translateYInput: HTMLInputElement;
+  translateZInput: HTMLInputElement;
+  previewTranslateButton: HTMLButtonElement;
+  scaleFactorInput: HTMLInputElement;
+  previewScaleButton: HTMLButtonElement;
 }
 
 export function mountEditor(elements: EditorElements, commands: EditorCommands): void {
@@ -34,6 +40,8 @@ export function mountEditor(elements: EditorElements, commands: EditorCommands):
     const isPreviewing = status === "previewing";
     const isBusy = status === "applying";
     elements.previewButton.disabled = !hasSelection || isBusy;
+    elements.previewTranslateButton.disabled = !hasSelection || isBusy;
+    elements.previewScaleButton.disabled = !hasSelection || isBusy;
     elements.applyButton.disabled = !isPreviewing || isBusy;
     elements.cancelButton.disabled = !isPreviewing || isBusy;
     elements.selectButton.disabled = isBusy;
@@ -71,6 +79,26 @@ export function mountEditor(elements: EditorElements, commands: EditorCommands):
       return;
     }
     commands.previewRotation(delta);
+  });
+
+  elements.previewTranslateButton.addEventListener("click", () => {
+    const dx = Number(elements.translateXInput.value);
+    const dy = Number(elements.translateYInput.value);
+    const dz = Number(elements.translateZInput.value);
+    if (![dx, dy, dz].every(Number.isFinite)) {
+      renderNow("Enter finite dx/dy/dz values (spatial reference linear units) to preview.");
+      return;
+    }
+    void commands.previewTranslation(dx, dy, dz);
+  });
+
+  elements.previewScaleButton.addEventListener("click", () => {
+    const factor = Number(elements.scaleFactorInput.value);
+    if (!Number.isFinite(factor) || factor <= 0) {
+      renderNow("Enter a finite, positive scale factor to preview.");
+      return;
+    }
+    commands.previewScale(factor);
   });
 
   elements.cancelButton.addEventListener("click", () => {

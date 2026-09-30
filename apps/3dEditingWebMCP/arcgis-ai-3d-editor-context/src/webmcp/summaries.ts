@@ -30,6 +30,20 @@ export function summarizeScene(config: AppConfig, featureLayerLoaded: boolean): 
   };
 }
 
+export interface PendingPreviewSummary {
+  kind: "rotation" | "translation" | "scale";
+  /** Candidate transform fields, regardless of which kind of edit produced them. */
+  candidateAngleDegrees: number;
+  candidateTranslation: { x: number; y: number; z: number };
+  candidateScale: { x: number; y: number; z: number };
+  /** Present only when kind === "rotation". */
+  deltaDegrees: number | null;
+  /** Present only when kind === "translation", in the layer's spatial reference linear units. */
+  translationDelta: { dx: number; dy: number; dz: number } | null;
+  /** Present only when kind === "scale"; uniform factor applied to sx/sy/sz. */
+  scaleFactor: number | null;
+}
+
 export interface SelectionSummary {
   status: EditSession["status"];
   objectId: number | null;
@@ -37,22 +51,35 @@ export interface SelectionSummary {
   layerUrl: string | null;
   /** Last service-confirmed angle (degrees), never the pending preview. */
   currentAngleDegrees: number | null;
-  /** Local-only preview candidate, if a rotation is currently proposed; never persisted. */
-  pendingPreview: { candidateAngleDegrees: number; deltaDegrees: number } | null;
+  /** Local-only preview candidate, if a rotation/translation/scale is currently proposed; never persisted. */
+  pendingPreview: PendingPreviewSummary | null;
   error: string | null;
 }
 
 export function summarizeSelection(session: EditSession): SelectionSummary {
+  const { candidate, pendingChange } = session;
+  const pendingPreview: PendingPreviewSummary | null =
+    candidate && pendingChange
+      ? {
+          kind: pendingChange.kind,
+          candidateAngleDegrees: candidate.rdeg,
+          candidateTranslation: { x: candidate.tx, y: candidate.ty, z: candidate.tz },
+          candidateScale: { x: candidate.sx, y: candidate.sy, z: candidate.sz },
+          deltaDegrees: pendingChange.kind === "rotation" ? pendingChange.deltaDegrees : null,
+          translationDelta:
+            pendingChange.kind === "translation"
+              ? { dx: pendingChange.dx, dy: pendingChange.dy, dz: pendingChange.dz }
+              : null,
+          scaleFactor: pendingChange.kind === "scale" ? pendingChange.factor : null,
+        }
+      : null;
   return {
     status: session.status,
     objectId: session.selected?.objectId ?? null,
     displayName: session.selected?.displayName ?? null,
     layerUrl: session.selected?.layerUrl ?? null,
     currentAngleDegrees: session.original?.rdeg ?? null,
-    pendingPreview:
-      session.candidate && session.pendingDeltaDegrees !== null
-        ? { candidateAngleDegrees: session.candidate.rdeg, deltaDegrees: session.pendingDeltaDegrees }
-        : null,
+    pendingPreview,
     error: session.error,
   };
 }

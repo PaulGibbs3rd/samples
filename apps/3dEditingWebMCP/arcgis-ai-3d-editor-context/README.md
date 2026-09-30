@@ -4,13 +4,13 @@ TypeScript browser app scaffolded with [`@arcgis/create`](https://www.npmjs.com/
 ArcGIS Maps SDK for JavaScript template). See [`docs/architecture.md`](./docs/architecture.md) for the full design
 and milestone plan, and [`AGENTS.md`](./AGENTS.md) for the agent workflow.
 
-## Status: milestone 2 — WebMCP tool registration, plus a visual rotation demo
+## Status: milestone 3 — translation and scaling with spatial reference/unit checks
 
-Milestone 0's capability report, milestone 1's rotate/preview/apply/cancel editor, and milestone 2's WebMCP tool
-surface are all implemented and live-verified end-to-end against a real enterprise test service. A live 3D
-`<arcgis-scene>` view and a rotating "ghost" preview mesh (see "Visual rotation demo" below) were added on top of
-this so the rotation itself can be seen, not just read from attribute tables. See "Data and editing prerequisites"
-and the milestone plan in `docs/architecture.md`.
+Milestone 0's capability report, milestone 1's rotate/preview/apply/cancel editor, milestone 2's WebMCP tool
+surface, and milestone 3's translation/scale editing are all implemented and live-verified end-to-end against a
+real enterprise test service. A live 3D `<arcgis-scene>` view and a rotating "ghost" preview mesh (see "Visual
+rotation demo" below) were added on top of this so the rotation itself can be seen, not just read from attribute
+tables. See "Data and editing prerequisites" and the milestone plan in `docs/architecture.md`.
 
 **No credentials or real service URLs are committed to this repository** — `.env` is git-ignored. Running the
 app without a local `.env` shows an explicit demo fixture, clearly labeled as such. See
@@ -102,6 +102,49 @@ Both milestones have been run against a real (anonymously-readable, editing-enab
   which does not itself implement the WebMCP API. No WebMCP-enabled browser/agent host was available in this
   environment to verify true end-to-end discovery and invocation by a real agent. The tool registration code,
   shared-state wiring, and tool `execute()` behavior are verified; genuine agent discovery is not.
+
+### Milestone 3 findings
+
+- **Extended the rotation-only editor to translation and scale** following the exact same pattern: pure math
+  mutators (`translateBy()`/`scaleBy()` in `src/geometry/transform.ts`), session proposals (`proposeTranslation()`/
+  `proposeScale()` in `src/editing/edit-session.ts`), SDK-facing apply/checks (`src/arcgis/object-transform.ts`),
+  command orchestration (`src/editing/commands.ts`), UI sections (`src/ui/editor-view.ts` +
+  `src/ui/editor-controller.ts`), and two new WebMCP tools (`propose_translation`/`propose_scale` in
+  `src/webmcp/tool-adapter.ts`) — no `apply_translation`/`apply_scale` tools exist, for the same human-approval-
+  gate reason `apply_proposal` doesn't exist for rotation.
+- **UX scope decisions:** translation is a 3-axis delta input (`dx`, `dy`, `dz`, expressed in the FeatureLayer's
+  spatial reference linear units) rather than absolute target coordinates, mirroring rotation's delta-based UX.
+  Scale is a single uniform factor that multiplies `sx`/`sy`/`sz` equally, rather than three independent axis
+  inputs — chosen for demo simplicity since non-uniform scale isn't a milestone 3 requirement.
+- **Validation:** both translation and scale reject non-finite (`NaN`/`Infinity`) inputs; scale additionally
+  rejects zero or negative factors as a degenerate edit. Translation additionally checks the FeatureLayer's
+  `spatialReference.isGeographic` (`checkTranslationSupported()`) and refuses to propose a translation against a
+  geographic (degree-based) spatial reference, since a linear-unit delta is meaningless there — this mirrors
+  architecture.md's "spatial reference/unit checks" acceptance criterion. `SeattleCube_3DObject` uses a projected
+  spatial reference (Web Mercator, wkid 102100), so this check passes silently for it; the rejection path itself
+  is unit-tested rather than live-verified, since no geographic-SR test service was available.
+- **Generalized `applyRotation()` into a diff-based `applyTransform()`:** rather than each edit "kind" writing a
+  fixed field set, `applyTransform()` compares `session.original` against `session.candidate` across all seven
+  mutable transform fields (`tx/ty/tz`, `sx/sy/sz`, `rdeg`) and writes only whichever fields actually differ. This
+  removes the need for `commands.ts` to branch on which kind of edit was proposed, and naturally supports any
+  future combined edit (e.g. rotate-and-translate in one apply) without further changes to the apply path.
+- **Generalized `EditSession.pendingDeltaDegrees: number | null`** into a discriminated union
+  `PendingChange = {kind:"rotation", deltaDegrees} | {kind:"translation", dx, dy, dz} | {kind:"scale", factor}` so
+  the UI and WebMCP summaries can render the correct preview text (delta degrees vs. offset vs. factor) for
+  whichever kind of edit is currently pending.
+- **The ghost-preview mesh needed no changes.** `src/arcgis/mesh-preview.ts`'s `applyTransformToMesh()` and
+  `src/ui/scene-preview.ts` were already generic over the full `ObjectTransform` (translation, scale, and
+  rotation all map onto `MeshTransform` fields — see "Visual rotation demo" below), so translate/scale preview
+  and apply automatically render live in the ghost mesh with zero additional code.
+- **Live-verified all four milestone 3 acceptance-adjacent flows** against `SeattleCube_3DObject` (`OBJECTID=1`):
+  previewing a translation (`dx=1,dy=0,dz=0`) rendered the correct candidate offset and made no service write;
+  applying it persisted `esri3do_tx=1.0` (confirmed by requery); previewing and cancelling a scale proposal
+  (`factor=1.1`) correctly restored the original `1.00, 1.00, 1.00` scale display; applying a scale of `1.1`
+  persisted `esri3do_sx/sy/sz=1.1` (confirmed by requery, and by the rendered footprint extent growing from
+  74.18×74.18 to 81.60×81.60 — exactly the expected `74.18 × 1.1`); the apply-success status message correctly
+  reports the field(s) that actually changed (e.g. "offset is now (0.00, 0.00, 0.00)." or "scale is now (1.10,
+  1.10, 1.10)."), not a generic "angle is now 0°" leftover from the rotation-only version of the message. The test
+  object was reset back to its neutral transform (`tx/ty/tz=0`, `sx/sy/sz=1`, `rdeg=0`) after verification.
 
 ### Visual rotation demo (ghost preview)
 
@@ -222,13 +265,15 @@ The report will show:
 
 ## What's not done yet
 
-- No WebMCP tool registration — that's milestone 2. `src/editing/commands.ts`'s `EditorCommands` class is designed
-  to be reused as-is by that adapter (select/preview/cancel/apply are already decoupled from the DOM).
 - No authentication flow wired into the running app, so only public layers can be checked/edited right now.
-- Milestone 1 only ever rotates around the object's **existing** rotation axis (writing `esri3do_rdeg` only); it
-  does not let you change the axis, translation, or scale.
+- Scale is uniform-factor only (`sx = sy = sz`); there is no UI/tool for independent per-axis scale.
+- Rotation only ever rotates around the object's **existing** rotation axis (writing `esri3do_rdeg` only); it
+  does not let you change the axis itself.
 - No undo/redo beyond a single pending preview's cancel; once an edit is applied there is no "undo last apply" in
-  the UI (you'd need to apply an inverse rotation).
+  the UI (you'd need to apply an inverse edit).
+- The real SceneLayer-rendered feature does not visually update after an apply (server-side scene cache rebuild
+  is required); see "Visual rotation demo" above for the ghost-preview workaround and why a client-side fix isn't
+  possible in this SDK version.
 
 ## Packages used
 

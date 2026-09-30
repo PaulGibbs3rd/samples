@@ -85,6 +85,12 @@ const angleInput = document.querySelector<HTMLInputElement>("#rotate-angle-input
 const previewButton = document.querySelector<HTMLButtonElement>("#preview-rotation");
 const applyButton = document.querySelector<HTMLButtonElement>("#apply-rotation");
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel-rotation");
+const translateXInput = document.querySelector<HTMLInputElement>("#translate-x-input");
+const translateYInput = document.querySelector<HTMLInputElement>("#translate-y-input");
+const translateZInput = document.querySelector<HTMLInputElement>("#translate-z-input");
+const previewTranslateButton = document.querySelector<HTMLButtonElement>("#preview-translation");
+const scaleFactorInput = document.querySelector<HTMLInputElement>("#scale-factor-input");
+const previewScaleButton = document.querySelector<HTMLButtonElement>("#preview-scale");
 
 if (
   editorPanel &&
@@ -93,7 +99,13 @@ if (
   angleInput &&
   previewButton &&
   applyButton &&
-  cancelButton
+  cancelButton &&
+  translateXInput &&
+  translateYInput &&
+  translateZInput &&
+  previewTranslateButton &&
+  scaleFactorInput &&
+  previewScaleButton
 ) {
   if (hasSceneLayerTarget(config)) {
     const commands = new EditorCommands(config);
@@ -106,6 +118,12 @@ if (
         previewButton,
         applyButton,
         cancelButton,
+        translateXInput,
+        translateYInput,
+        translateZInput,
+        previewTranslateButton,
+        scaleFactorInput,
+        previewScaleButton,
       },
       commands,
     );
@@ -123,7 +141,15 @@ if (
   } else {
     editorPanel.innerHTML =
       '<p class="empty">No test service configured — set VITE_SCENE_LAYER_URL or VITE_SCENE_LAYER_ITEM_ID to use the editor.</p>';
-    for (const button of [selectButton, previewButton, applyButton, cancelButton]) button.disabled = true;
+    for (const button of [
+      selectButton,
+      previewButton,
+      applyButton,
+      cancelButton,
+      previewTranslateButton,
+      previewScaleButton,
+    ])
+      button.disabled = true;
     sceneEl?.remove();
   }
 } else {

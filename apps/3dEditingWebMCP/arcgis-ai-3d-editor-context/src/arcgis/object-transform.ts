@@ -29,6 +29,19 @@ const TRANSFORM_FIELDS = [
   TRANSFORM_ANGLE_FIELD,
 ] as const;
 
+/** The subset of `ObjectTransform` fields any milestone 1/3 mutator can change; the rotation axis (rx/ry/rz) never is. */
+const TRANSFORM_FIELD_KEYS = ["tx", "ty", "tz", "sx", "sy", "sz", "rdeg"] as const;
+
+const TRANSFORM_KEY_TO_FIELD: Record<(typeof TRANSFORM_FIELD_KEYS)[number], string> = {
+  tx: "esri3do_tx",
+  ty: "esri3do_ty",
+  tz: "esri3do_tz",
+  sx: "esri3do_sx",
+  sy: "esri3do_sy",
+  sz: "esri3do_sz",
+  rdeg: TRANSFORM_ANGLE_FIELD,
+};
+
 function num(attributes: Record<string, unknown>, field: string, fallback: number): number {
   const value = attributes[field];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -59,6 +72,30 @@ export interface ObjectInspection {
 
 function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Milestone 3's spatial-reference/unit check for translation: `tx/ty/tz`
+ * are expressed in the associated FeatureLayer's spatial reference linear
+ * units (meters for the Web Mercator test service). A geographic spatial
+ * reference (degrees) has no linear unit, so a "move 5 meters" delta would
+ * be silently wrong rather than rejected — reject translation up front
+ * instead, per `docs/architecture.md`'s "coordinate-aware handling" note.
+ * Returns a human-readable reason when translation is unsupported, or null
+ * when it is safe to proceed.
+ */
+export function checkTranslationSupported(featureLayer: FeatureLayer): string | null {
+  const spatialReference = featureLayer.spatialReference;
+  if (!spatialReference) {
+    return "Associated FeatureLayer has no spatialReference yet; cannot validate translation units.";
+  }
+  if (spatialReference.isGeographic) {
+    return (
+      `Associated FeatureLayer's spatial reference (wkid ${spatialReference.wkid ?? "unknown"}) is geographic ` +
+      "(degrees), not a projected/linear unit — translation deltas are not supported on this layer."
+    );
+  }
+  return null;
 }
 
 /** Reads a (loaded) SceneLayer's associated FeatureLayer, throwing if there isn't one. */
@@ -125,17 +162,32 @@ export async function inspectObject(featureLayer: FeatureLayer, objectId: number
 }
 
 /**
- * Applies a rotation-only edit (writes only `esri3do_rdeg`) via
- * `FeatureLayer.applyEdits()`, inspecting the per-feature `updateResults`
- * rather than trusting the resolved promise alone.
+ * Applies whichever `esri3do_*` fields differ between `original` and
+ * `candidate` via `FeatureLayer.applyEdits()`, inspecting the per-feature
+ * `updateResults` rather than trusting the resolved promise alone. Writing
+ * only the changed fields (rather than the whole transform) keeps every
+ * milestone's edit minimal and matches `applyEdits()`'s partial-update
+ * semantics — unrelated `esri3do_*` fields are left untouched on the
+ * service.
  */
-export async function applyRotation(
+export async function applyTransform(
   featureLayer: FeatureLayer,
   objectId: number,
+  original: ObjectTransform,
   candidate: ObjectTransform,
   sourceAttributes: Record<string, unknown>,
 ): Promise<ApplyResult> {
   const appliedAt = new Date().toISOString();
+  const changedFields: Record<string, number> = {};
+  for (const key of TRANSFORM_FIELD_KEYS) {
+    if (candidate[key] !== original[key]) {
+      changedFields[TRANSFORM_KEY_TO_FIELD[key]] = candidate[key];
+    }
+  }
+  if (Object.keys(changedFields).length === 0) {
+    return { success: true, objectId, error: null, appliedAt };
+  }
+
   try {
     // 3D Object FeatureLayers (layers with `infoFor3D`) force `globalIdUsed: true`
     // internally regardless of the `applyEdits()` options argument — live-verified:
@@ -146,7 +198,7 @@ export async function applyRotation(
     const globalIdField = featureLayer.globalIdField;
     const attributes: Record<string, unknown> = {
       [featureLayer.objectIdField]: objectId,
-      [TRANSFORM_ANGLE_FIELD]: candidate.rdeg,
+      ...changedFields,
     };
     if (globalIdField) {
       const globalIdValue = sourceAttributes[globalIdField];

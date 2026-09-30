@@ -11,7 +11,8 @@ import type FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 
 import type { AppConfig } from "../arcgis/config.js";
 import {
-  applyRotation,
+  applyTransform,
+  checkTranslationSupported,
   inspectObject,
   loadAssociatedFeatureLayer,
   requeryTransform,
@@ -24,9 +25,13 @@ import {
   createIdleSession,
   failApply,
   proposeRotation,
+  proposeScale,
+  proposeTranslation,
   selectObject,
   type EditSession,
+  type PendingChange,
 } from "./edit-session.js";
+import type { ObjectTransform } from "../geometry/transform.js";
 
 export interface CommandResult {
   session: EditSession;
@@ -38,6 +43,19 @@ export type CommandListener = (result: CommandResult) => void;
 
 function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Human-readable summary of the just-confirmed transform, tailored to which kind of edit was applied. */
+function describeConfirmedTransform(pendingChange: PendingChange | null, confirmed: ObjectTransform): string {
+  switch (pendingChange?.kind) {
+    case "translation":
+      return `offset is now (${confirmed.tx.toFixed(2)}, ${confirmed.ty.toFixed(2)}, ${confirmed.tz.toFixed(2)}).`;
+    case "scale":
+      return `scale is now (${confirmed.sx.toFixed(2)}, ${confirmed.sy.toFixed(2)}, ${confirmed.sz.toFixed(2)}).`;
+    case "rotation":
+    default:
+      return `angle is now ${confirmed.rdeg.toFixed(2)}°.`;
+  }
 }
 
 /**
@@ -156,6 +174,38 @@ export class EditorCommands {
     }
   }
 
+  /**
+   * Computes a local-only translation preview candidate; no service call is
+   * made. Milestone 3's spatial-reference/unit check runs first — `tx/ty/tz`
+   * are expressed in the associated FeatureLayer's spatial reference linear
+   * units, so translation is rejected up front on a geographic (degree-based)
+   * spatial reference rather than silently applying the delta in the wrong
+   * units.
+   */
+  async previewTranslation(dx: number, dy: number, dz: number): Promise<CommandResult> {
+    try {
+      const featureLayer = await this.getFeatureLayer();
+      const unsupportedReason = checkTranslationSupported(featureLayer);
+      if (unsupportedReason) {
+        return this.emit(`Preview failed: ${unsupportedReason}`);
+      }
+      this.session = proposeTranslation(this.session, dx, dy, dz);
+      return this.emit("Preview only — no service edit has been made yet.");
+    } catch (err) {
+      return this.emit(`Preview failed: ${describeError(err)}`);
+    }
+  }
+
+  /** Computes a local-only scale preview candidate (uniform factor across sx/sy/sz); no service call is made. */
+  previewScale(factor: number): CommandResult {
+    try {
+      this.session = proposeScale(this.session, factor);
+      return this.emit("Preview only — no service edit has been made yet.");
+    } catch (err) {
+      return this.emit(`Preview failed: ${describeError(err)}`);
+    }
+  }
+
   /** Discards the pending preview candidate; the original remains authoritative. */
   discardProposal(): CommandResult {
     try {
@@ -174,17 +224,19 @@ export class EditorCommands {
    */
   async applyProposal(): Promise<CommandResult> {
     const session = this.session;
-    if (session.status !== "previewing" || !session.candidate || !session.selected) {
-      return this.emit("Nothing to apply — preview a rotation first.");
+    if (session.status !== "previewing" || !session.candidate || !session.selected || !session.original) {
+      return this.emit("Nothing to apply — preview an edit first.");
     }
     const objectId = session.selected.objectId;
     const candidate = session.candidate;
+    const original = session.original;
+    const pendingChange = session.pendingChange;
     this.session = beginApply(session);
     this.emit("Applying edit…");
 
     try {
       const layer = await this.getFeatureLayer();
-      const result = await applyRotation(layer, objectId, candidate, session.selected.attributes);
+      const result = await applyTransform(layer, objectId, original, candidate, session.selected.attributes);
       if (!result.success) {
         this.session = failApply(this.session, result.error ?? "applyEdits reported failure", result);
         return this.emit("Apply failed — original value kept.");
@@ -193,7 +245,7 @@ export class EditorCommands {
       const confirmed = await requeryTransform(layer, objectId);
       this.session = completeApply(this.session, confirmed, result);
       this.inspection = this.inspection ? { ...this.inspection, transform: confirmed } : this.inspection;
-      return this.emit(`Applied and confirmed by requery: angle is now ${confirmed.rdeg.toFixed(2)}°.`);
+      return this.emit(`Applied and confirmed by requery: ${describeConfirmedTransform(pendingChange, confirmed)}`);
     } catch (err) {
       this.session = failApply(this.session, describeError(err), null);
       return this.emit("Apply failed — original value kept.");

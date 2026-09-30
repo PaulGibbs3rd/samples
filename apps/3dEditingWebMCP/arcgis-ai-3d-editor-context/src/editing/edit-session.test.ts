@@ -6,6 +6,8 @@ import {
   createIdleSession,
   failApply,
   proposeRotation,
+  proposeScale,
+  proposeTranslation,
   selectObject,
   type SelectedObject,
 } from "./edit-session.js";
@@ -45,11 +47,52 @@ describe("proposeRotation", () => {
     expect(previewing.status).toBe("previewing");
     expect(previewing.candidate?.rdeg).toBe(45);
     expect(previewing.original).toBe(TRANSFORM);
-    expect(previewing.pendingDeltaDegrees).toBe(45);
+    expect(previewing.pendingChange).toEqual({ kind: "rotation", deltaDegrees: 45 });
   });
 
   it("throws when nothing is selected", () => {
     expect(() => proposeRotation(createIdleSession(), 10)).toThrow();
+  });
+});
+
+describe("proposeTranslation", () => {
+  it("computes a local candidate without touching original", () => {
+    const selected = selectObject(SELECTED, TRANSFORM);
+    const previewing = proposeTranslation(selected, 1, 2, 3);
+    expect(previewing.status).toBe("previewing");
+    expect(previewing.candidate).toEqual({ ...TRANSFORM, tx: 1, ty: 2, tz: 3 });
+    expect(previewing.original).toBe(TRANSFORM);
+    expect(previewing.pendingChange).toEqual({ kind: "translation", dx: 1, dy: 2, dz: 3 });
+  });
+
+  it("throws when nothing is selected", () => {
+    expect(() => proposeTranslation(createIdleSession(), 1, 0, 0)).toThrow();
+  });
+
+  it("throws on non-finite deltas", () => {
+    const selected = selectObject(SELECTED, TRANSFORM);
+    expect(() => proposeTranslation(selected, Number.NaN, 0, 0)).toThrow();
+  });
+});
+
+describe("proposeScale", () => {
+  it("computes a local candidate without touching original", () => {
+    const selected = selectObject(SELECTED, TRANSFORM);
+    const previewing = proposeScale(selected, 2);
+    expect(previewing.status).toBe("previewing");
+    expect(previewing.candidate).toEqual({ ...TRANSFORM, sx: 2, sy: 2, sz: 2 });
+    expect(previewing.original).toBe(TRANSFORM);
+    expect(previewing.pendingChange).toEqual({ kind: "scale", factor: 2 });
+  });
+
+  it("throws when nothing is selected", () => {
+    expect(() => proposeScale(createIdleSession(), 2)).toThrow();
+  });
+
+  it("throws on a zero or negative factor", () => {
+    const selected = selectObject(SELECTED, TRANSFORM);
+    expect(() => proposeScale(selected, 0)).toThrow();
+    expect(() => proposeScale(selected, -1)).toThrow();
   });
 });
 

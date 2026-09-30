@@ -65,3 +65,52 @@ export function isRotationOnlyChange(original: ObjectTransform, candidate: Objec
     original.rz === candidate.rz
   );
 }
+
+/**
+ * Milestone 3: returns a new transform with (dx, dy, dz) added to the
+ * existing translation offset, expressed in the associated FeatureLayer's
+ * spatial reference linear units (e.g. meters for the Web Mercator test
+ * service). Rotation, scale, and the rotation axis are never changed by this
+ * operation. Callers are responsible for the spatial-reference/unit check
+ * (rejecting translation on a geographic, degree-based spatial reference) —
+ * that check needs the live `FeatureLayer.spatialReference`, an SDK object,
+ * so it lives in `arcgis/object-transform.ts`/`editing/commands.ts`, keeping
+ * this module free of any `@arcgis/core` dependency.
+ */
+export function translateBy(original: ObjectTransform, dx: number, dy: number, dz: number): ObjectTransform {
+  for (const [label, value] of [
+    ["dx", dx],
+    ["dy", dy],
+    ["dz", dz],
+  ] as const) {
+    if (!Number.isFinite(value)) {
+      throw new Error(`translateBy requires finite deltas, got ${label}=${value}`);
+    }
+  }
+  return {
+    ...original,
+    tx: original.tx + dx,
+    ty: original.ty + dy,
+    tz: original.tz + dz,
+  };
+}
+
+/**
+ * Milestone 3: returns a new transform with the existing per-axis scale
+ * multiplied by `factor` (applied uniformly to sx/sy/sz, matching the
+ * demo's single "scale by" input). `factor` must be finite and strictly
+ * positive — zero would collapse the mesh to a point and a negative factor
+ * would mirror it, both of which milestone 3 treats as invalid/unsupported
+ * edits rather than silently producing degenerate geometry.
+ */
+export function scaleBy(original: ObjectTransform, factor: number): ObjectTransform {
+  if (!Number.isFinite(factor) || factor <= 0) {
+    throw new Error(`scaleBy requires a finite, positive scale factor, got: ${factor}`);
+  }
+  return {
+    ...original,
+    sx: original.sx * factor,
+    sy: original.sy * factor,
+    sz: original.sz * factor,
+  };
+}

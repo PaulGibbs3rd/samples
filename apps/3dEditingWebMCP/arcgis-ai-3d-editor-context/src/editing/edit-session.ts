@@ -7,7 +7,7 @@
  * caller, keeping this reducer synchronous and easy to unit test.
  */
 import type { ObjectTransform } from "../geometry/transform.js";
-import { rotateBy } from "../geometry/transform.js";
+import { rotateBy, scaleBy, translateBy } from "../geometry/transform.js";
 
 export type EditSessionStatus = "idle" | "selected" | "previewing" | "applying" | "applied" | "error";
 
@@ -28,6 +28,16 @@ export interface ApplyResult {
   appliedAt: string;
 }
 
+/**
+ * Describes, for display, which local proposal produced `session.candidate`.
+ * Only one kind of edit can be pending at a time in milestone 3's UI — the
+ * candidate transform itself (not this descriptor) is what gets applied.
+ */
+export type PendingChange =
+  | { kind: "rotation"; deltaDegrees: number }
+  | { kind: "translation"; dx: number; dy: number; dz: number }
+  | { kind: "scale"; factor: number };
+
 export interface EditSession {
   status: EditSessionStatus;
   selected: SelectedObject | null;
@@ -35,8 +45,8 @@ export interface EditSession {
   original: ObjectTransform | null;
   /** Local-only candidate transform; never sent to the service until apply. */
   candidate: ObjectTransform | null;
-  /** The delta angle (degrees) that produced `candidate`, for display. */
-  pendingDeltaDegrees: number | null;
+  /** Describes the pending edit that produced `candidate`, for display. */
+  pendingChange: PendingChange | null;
   error: string | null;
   lastApplyResult: ApplyResult | null;
 }
@@ -47,7 +57,7 @@ export function createIdleSession(): EditSession {
     selected: null,
     original: null,
     candidate: null,
-    pendingDeltaDegrees: null,
+    pendingChange: null,
     error: null,
     lastApplyResult: null,
   };
@@ -60,7 +70,7 @@ export function selectObject(selected: SelectedObject, original: ObjectTransform
     selected,
     original,
     candidate: null,
-    pendingDeltaDegrees: null,
+    pendingChange: null,
     error: null,
     lastApplyResult: null,
   };
@@ -80,7 +90,42 @@ export function proposeRotation(session: EditSession, deltaDegrees: number): Edi
     ...session,
     status: "previewing",
     candidate,
-    pendingDeltaDegrees: deltaDegrees,
+    pendingChange: { kind: "rotation", deltaDegrees },
+    error: null,
+  };
+}
+
+/**
+ * Computes a local translation preview candidate (dx/dy/dz added to the
+ * existing offset, in the layer's spatial reference linear units). Callers
+ * are expected to have already rejected non-projected spatial references
+ * (see `editing/commands.ts`) before calling this.
+ */
+export function proposeTranslation(session: EditSession, dx: number, dy: number, dz: number): EditSession {
+  if (session.status === "idle" || !session.selected || !session.original) {
+    throw new Error("proposeTranslation requires a selected object");
+  }
+  const candidate = translateBy(session.original, dx, dy, dz);
+  return {
+    ...session,
+    status: "previewing",
+    candidate,
+    pendingChange: { kind: "translation", dx, dy, dz },
+    error: null,
+  };
+}
+
+/** Computes a local scale preview candidate (existing per-axis scale multiplied uniformly by `factor`). */
+export function proposeScale(session: EditSession, factor: number): EditSession {
+  if (session.status === "idle" || !session.selected || !session.original) {
+    throw new Error("proposeScale requires a selected object");
+  }
+  const candidate = scaleBy(session.original, factor);
+  return {
+    ...session,
+    status: "previewing",
+    candidate,
+    pendingChange: { kind: "scale", factor },
     error: null,
   };
 }
@@ -91,7 +136,7 @@ export function cancelProposal(session: EditSession): EditSession {
     ...session,
     status: "selected",
     candidate: null,
-    pendingDeltaDegrees: null,
+    pendingChange: null,
     error: null,
   };
 }
@@ -117,7 +162,7 @@ export function completeApply(session: EditSession, confirmed: ObjectTransform, 
     status: "applied",
     original: confirmed,
     candidate: null,
-    pendingDeltaDegrees: null,
+    pendingChange: null,
     error: null,
     lastApplyResult: result,
   };
@@ -129,7 +174,7 @@ export function failApply(session: EditSession, error: string, result: ApplyResu
     ...session,
     status: "error",
     candidate: null,
-    pendingDeltaDegrees: null,
+    pendingChange: null,
     error,
     lastApplyResult: result,
   };

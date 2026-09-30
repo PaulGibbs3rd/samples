@@ -70,10 +70,42 @@ export function renderEditorPanel(container: HTMLElement, model: EditorViewModel
       <p>Current angle: <strong>${original ? original.rdeg.toFixed(2) : "?"}°</strong> around axis
         (${original ? `${original.rx.toFixed(2)}, ${original.ry.toFixed(2)}, ${original.rz.toFixed(2)}` : "?"})</p>
       ${
-        candidate
+        candidate && session.pendingChange?.kind === "rotation"
           ? `<p class="report-mode report-mode--demo-fixture">Preview only — not saved: ${candidate.rdeg.toFixed(
               2,
-            )}° (delta ${session.pendingDeltaDegrees?.toFixed(2)}°)</p>`
+            )}° (delta ${session.pendingChange.deltaDegrees.toFixed(2)}°)</p>`
+          : ""
+      }
+    </section>
+
+    <section>
+      <h3>Translation</h3>
+      <p>Current offset: <strong>${
+        original ? `${original.tx.toFixed(2)}, ${original.ty.toFixed(2)}, ${original.tz.toFixed(2)}` : "?"
+      }</strong> (spatial reference linear units)</p>
+      ${
+        candidate && session.pendingChange?.kind === "translation"
+          ? `<p class="report-mode report-mode--demo-fixture">Preview only — not saved: ${candidate.tx.toFixed(
+              2,
+            )}, ${candidate.ty.toFixed(2)}, ${candidate.tz.toFixed(2)} (delta ${session.pendingChange.dx.toFixed(
+              2,
+            )}, ${session.pendingChange.dy.toFixed(2)}, ${session.pendingChange.dz.toFixed(2)})</p>`
+          : ""
+      }
+    </section>
+
+    <section>
+      <h3>Scale</h3>
+      <p>Current scale: <strong>${
+        original ? `${original.sx.toFixed(2)}, ${original.sy.toFixed(2)}, ${original.sz.toFixed(2)}` : "?"
+      }</strong></p>
+      ${
+        candidate && session.pendingChange?.kind === "scale"
+          ? `<p class="report-mode report-mode--demo-fixture">Preview only — not saved: ${candidate.sx.toFixed(
+              2,
+            )}, ${candidate.sy.toFixed(2)}, ${candidate.sz.toFixed(2)} (factor ${session.pendingChange.factor.toFixed(
+              2,
+            )}×)</p>`
           : ""
       }
       <p role="status" class="status">${escapeHtml(statusMessage)}</p>

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isRotationOnlyChange, normalizeDegrees, rotateBy, type ObjectTransform } from "./transform.js";
+import {
+  isRotationOnlyChange,
+  normalizeDegrees,
+  rotateBy,
+  scaleBy,
+  translateBy,
+  type ObjectTransform,
+} from "./transform.js";
 
 const BASE: ObjectTransform = {
   tx: 0,
@@ -66,6 +73,77 @@ describe("rotateBy", () => {
   it("rejects non-finite deltas", () => {
     expect(() => rotateBy(BASE, Number.NaN)).toThrow();
     expect(() => rotateBy(BASE, Number.POSITIVE_INFINITY)).toThrow();
+  });
+});
+
+describe("translateBy", () => {
+  it("adds the deltas to the existing translation", () => {
+    const result = translateBy(BASE, 1, 2, 3);
+    expect(result.tx).toBe(1);
+    expect(result.ty).toBe(2);
+    expect(result.tz).toBe(3);
+  });
+
+  it("accumulates on top of an existing offset", () => {
+    const result = translateBy({ ...BASE, tx: 5, ty: -2, tz: 0 }, 1, 1, 1);
+    expect(result.tx).toBe(6);
+    expect(result.ty).toBe(-1);
+    expect(result.tz).toBe(1);
+  });
+
+  it("never mutates scale or rotation", () => {
+    const result = translateBy(BASE, 1, 1, 1);
+    expect(result.sx).toBe(BASE.sx);
+    expect(result.rdeg).toBe(BASE.rdeg);
+  });
+
+  it("does not mutate the original object", () => {
+    const original = { ...BASE };
+    translateBy(original, 1, 1, 1);
+    expect(original).toEqual(BASE);
+  });
+
+  it("rejects non-finite deltas", () => {
+    expect(() => translateBy(BASE, Number.NaN, 0, 0)).toThrow();
+    expect(() => translateBy(BASE, 0, Number.POSITIVE_INFINITY, 0)).toThrow();
+  });
+});
+
+describe("scaleBy", () => {
+  it("multiplies all three scale axes by the factor", () => {
+    const result = scaleBy(BASE, 2);
+    expect(result.sx).toBe(2);
+    expect(result.sy).toBe(2);
+    expect(result.sz).toBe(2);
+  });
+
+  it("compounds on top of an existing non-uniform scale", () => {
+    const result = scaleBy({ ...BASE, sx: 2, sy: 3, sz: 4 }, 0.5);
+    expect(result.sx).toBe(1);
+    expect(result.sy).toBe(1.5);
+    expect(result.sz).toBe(2);
+  });
+
+  it("never mutates translation or rotation", () => {
+    const result = scaleBy(BASE, 2);
+    expect(result.tx).toBe(BASE.tx);
+    expect(result.rdeg).toBe(BASE.rdeg);
+  });
+
+  it("does not mutate the original object", () => {
+    const original = { ...BASE };
+    scaleBy(original, 2);
+    expect(original).toEqual(BASE);
+  });
+
+  it("rejects non-finite factors", () => {
+    expect(() => scaleBy(BASE, Number.NaN)).toThrow();
+    expect(() => scaleBy(BASE, Number.POSITIVE_INFINITY)).toThrow();
+  });
+
+  it("rejects zero and negative factors", () => {
+    expect(() => scaleBy(BASE, 0)).toThrow();
+    expect(() => scaleBy(BASE, -1)).toThrow();
   });
 });
 

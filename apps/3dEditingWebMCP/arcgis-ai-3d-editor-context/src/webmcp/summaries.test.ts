@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { summarizeInspection, summarizeScene, summarizeSelection } from "./summaries.js";
 import type { AppConfig } from "../arcgis/config.js";
 import type { ObjectInspection } from "../arcgis/object-transform.js";
-import { createIdleSession, proposeRotation, selectObject, type SelectedObject } from "../editing/edit-session.js";
+import {
+  createIdleSession,
+  proposeRotation,
+  proposeScale,
+  proposeTranslation,
+  selectObject,
+  type SelectedObject,
+} from "../editing/edit-session.js";
 import type { ObjectTransform } from "../geometry/transform.js";
 
 const CONFIG: AppConfig = {
@@ -56,7 +63,43 @@ describe("summarizeSelection", () => {
     const summary = summarizeSelection(session);
     expect(summary.status).toBe("previewing");
     expect(summary.currentAngleDegrees).toBe(30);
-    expect(summary.pendingPreview).toEqual({ candidateAngleDegrees: 45, deltaDegrees: 15 });
+    expect(summary.pendingPreview).toEqual({
+      kind: "rotation",
+      candidateAngleDegrees: 45,
+      candidateTranslation: { x: 0, y: 0, z: 0 },
+      candidateScale: { x: 1, y: 1, z: 1 },
+      deltaDegrees: 15,
+      translationDelta: null,
+      scaleFactor: null,
+    });
+  });
+
+  it("reports a pending translation preview", () => {
+    const session = proposeTranslation(selectObject(SELECTED, TRANSFORM), 1, 2, 3);
+    const summary = summarizeSelection(session);
+    expect(summary.pendingPreview).toEqual({
+      kind: "translation",
+      candidateAngleDegrees: 30,
+      candidateTranslation: { x: 1, y: 2, z: 3 },
+      candidateScale: { x: 1, y: 1, z: 1 },
+      deltaDegrees: null,
+      translationDelta: { dx: 1, dy: 2, dz: 3 },
+      scaleFactor: null,
+    });
+  });
+
+  it("reports a pending scale preview", () => {
+    const session = proposeScale(selectObject(SELECTED, TRANSFORM), 2);
+    const summary = summarizeSelection(session);
+    expect(summary.pendingPreview).toEqual({
+      kind: "scale",
+      candidateAngleDegrees: 30,
+      candidateTranslation: { x: 0, y: 0, z: 0 },
+      candidateScale: { x: 2, y: 2, z: 2 },
+      deltaDegrees: null,
+      translationDelta: null,
+      scaleFactor: 2,
+    });
   });
 });
 

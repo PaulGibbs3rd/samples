@@ -49,6 +49,18 @@
                 <button id="preview-rotation" type="button" disabled>Preview</button>
               </div>
               <div class="editor-controls">
+                <label for="translate-x-input">Translate by dx, dy, dz</label>
+                <input id="translate-x-input" type="number" step="1" value="1" aria-label="dx" />
+                <input id="translate-y-input" type="number" step="1" value="0" aria-label="dy" />
+                <input id="translate-z-input" type="number" step="1" value="0" aria-label="dz" />
+                <button id="preview-translation" type="button" disabled>Preview</button>
+              </div>
+              <div class="editor-controls">
+                <label for="scale-factor-input">Scale by (factor)</label>
+                <input id="scale-factor-input" type="number" step="0.1" min="0.01" value="1.1" />
+                <button id="preview-scale" type="button" disabled>Preview</button>
+              </div>
+              <div class="editor-controls">
                 <button id="apply-rotation" type="button" disabled>Apply</button>
                 <button id="cancel-rotation" type="button" disabled>Cancel</button>
               </div>
