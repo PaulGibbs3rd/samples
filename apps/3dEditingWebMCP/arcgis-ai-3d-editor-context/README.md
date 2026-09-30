@@ -4,11 +4,13 @@ TypeScript browser app scaffolded with [`@arcgis/create`](https://www.npmjs.com/
 ArcGIS Maps SDK for JavaScript template). See [`docs/architecture.md`](./docs/architecture.md) for the full design
 and milestone plan, and [`AGENTS.md`](./AGENTS.md) for the agent workflow.
 
-## Status: milestone 2 — WebMCP tool registration
+## Status: milestone 2 — WebMCP tool registration, plus a visual rotation demo
 
 Milestone 0's capability report, milestone 1's rotate/preview/apply/cancel editor, and milestone 2's WebMCP tool
-surface are all implemented and live-verified end-to-end against a real enterprise test service. See "Data and
-editing prerequisites" and the milestone plan in `docs/architecture.md`.
+surface are all implemented and live-verified end-to-end against a real enterprise test service. A live 3D
+`<arcgis-scene>` view and a rotating "ghost" preview mesh (see "Visual rotation demo" below) were added on top of
+this so the rotation itself can be seen, not just read from attribute tables. See "Data and editing prerequisites"
+and the milestone plan in `docs/architecture.md`.
 
 **No credentials or real service URLs are committed to this repository** — `.env` is git-ignored. Running the
 app without a local `.env` shows an explicit demo fixture, clearly labeled as such. See
@@ -101,14 +103,56 @@ Both milestones have been run against a real (anonymously-readable, editing-enab
   environment to verify true end-to-end discovery and invocation by a real agent. The tool registration code,
   shared-state wiring, and tool `execute()` behavior are verified; genuine agent discovery is not.
 
+### Visual rotation demo (ghost preview)
+
+The tabular editor (object attributes + a numeric angle) doesn't show what a rotation actually looks like, so a
+live `<arcgis-scene>` (`src/arcgis/scene-render.ts`) renders the real `SceneLayer` alongside a translucent orange
+"ghost" `Mesh` graphic (`src/ui/scene-preview.ts`) that appears and rotates live whenever a preview is active,
+subscribed to the same `EditorCommands` pub-sub the UI and WebMCP tools already share.
+
+- **No typed SDK method exposes the real glTF asset**, so `src/arcgis/mesh-preview.ts` fetches it directly via
+  `query3d?formatOf3DObjects=3D_gltf` (the same endpoint milestone 0 used to confirm GLB/glTF presence), resolves
+  the matching asset by `parentGlobalId === feature.globalid`, and hands the result to
+  `meshUtils.createFromGLTF()`.
+- **glTF buffer URI quirk (live-verified):** the service's glTF asset has a `buffers[0].uri` that is a bare
+  relative filename (e.g. `esriGeometryMultiPatch_ESRI3DODERIVED.bin`) which does **not** resolve against the
+  hash-based `.../assets/<hash>` URL the glTF itself was fetched from. The actual binary lives at a *different*
+  `assetMaps` entry (`assetType: "binary"`, same `parentGlobalId`); `mesh-preview.ts` rewrites the buffer URI to
+  that entry's absolute `assetURL` before handing the glTF to the loader (via a rewritten `Blob`/object URL).
+- **`SceneLayer.associatedLayer.url` omits the layer index (live-verified):** unlike a `FeatureLayer` constructed
+  directly from a `.../FeatureServer/0` url, the `FeatureLayer` the SDK auto-derives from a `SceneLayer`'s
+  `associatedLayer` reports `.url` as the bare service root (`.../FeatureServer`, no `/0`). Calling `query3d`
+  directly against that bare root silently returns an **empty** `assetMaps` array (not an error) instead of the
+  real asset list. `mesh-preview.ts`'s `resolveLayerUrl()` appends `featureLayer.layerId` (defaulting to `0`)
+  whenever the url's last path segment isn't already numeric.
+- **`MeshTransform` maps 1:1 onto the `esri3do_*` attributes** milestone 1 already reads/writes
+  (`rotationAngle`↔`esri3do_rdeg`, `rotationAxis`↔`esri3do_rx/ry/rz`, `scale`↔`esri3do_sx/sy/sz`,
+  `translation`↔`esri3do_tx/ty/tz`), so the exact same `ObjectTransform` used to persist an edit can be applied
+  directly to a `Mesh.transform` (`applyTransformToMesh()`) — no separate rotation math was needed for the ghost.
+- **Live-verified against `SeattleCube_3DObject`:** selecting object 1 and clicking Preview shows the ghost mesh
+  appear, rotated relative to the real (solid) rendered feature beneath it; changing the angle and previewing
+  again updates the ghost's rotation live; Cancel hides the ghost; Apply persists the edit (confirmed by requery,
+  same as milestone 1) and hides the ghost.
+- **Scope decision:** the real SceneLayer-rendered feature is intentionally left visible (solid) underneath the
+  translucent ghost during preview, rather than attempting to hide/filter it via `SceneLayerView` — the ghost
+  overlay alone satisfies "see the rotation," and hiding the live feature would need a riskier, unverified API.
+- **Known limitation: the real feature's rendering does not visually update after Apply.** 3D Object SceneLayers
+  serve pre-tiled scene-cache nodes from the server; editing the `esri3do_*` attributes (confirmed correct via
+  requery) does not itself invalidate or regenerate those cached tiles client-side, and no client-callable
+  `refresh()`/cache-rebuild method is exposed on `SceneLayer` in this SDK version. The ghost preview is what
+  visually reflects a proposed/just-applied rotation; the underlying cached scene geometry only reflects it after
+  the service's scene cache is rebuilt server-side (out of scope here).
+
 ## Project layout
 
 ```text
 src/
   arcgis/   scene/layer loading and capability interpretation (types.ts, config.ts, capability-check.ts,
-            capability-interpret.ts, demo-fixture.ts) plus milestone 1's SDK glue (object-transform.ts)
+            capability-interpret.ts, demo-fixture.ts) plus milestone 1's SDK glue (object-transform.ts) and the
+            visual-demo's raw glTF fetching/mesh building (mesh-preview.ts) and scene wiring (scene-render.ts)
   ui/       capability-report-view.ts and editor-view.ts render report/editor state into the DOM;
-            editor-controller.ts wires DOM events to EditorCommands (no @arcgis/core imports)
+            editor-controller.ts wires DOM events to EditorCommands (no @arcgis/core imports); scene-preview.ts
+            owns the ghost preview graphic's lifecycle
   editing/  milestone 1's pure edit-session state machine (edit-session.ts) and the shared
             EditorCommands class (commands.ts) that owns the FeatureLayer + every SDK call
   geometry/ pure rotation/transform math (transform.ts) — no @arcgis/core import, fully unit tested

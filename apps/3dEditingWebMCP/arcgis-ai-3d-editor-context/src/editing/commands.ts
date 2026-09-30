@@ -50,9 +50,15 @@ function describeError(err: unknown): string {
  * Call `subscribe()` to be notified of every state change regardless of
  * which caller (UI click or WebMCP tool `execute()`) produced it.
  */
+interface LoadedLayers {
+  sceneLayer: SceneLayer;
+  featureLayer: FeatureLayer;
+}
+
 export class EditorCommands {
+  private sceneLayer: SceneLayer | null = null;
   private featureLayer: FeatureLayer | null = null;
-  private loadingLayer: Promise<FeatureLayer> | null = null;
+  private loadingLayers: Promise<LoadedLayers> | null = null;
   private inspection: ObjectInspection | null = null;
   private session: EditSession = createIdleSession();
   private listeners = new Set<CommandListener>();
@@ -99,14 +105,33 @@ export class EditorCommands {
     throw new Error("No SceneLayer configured (set VITE_SCENE_LAYER_URL or VITE_SCENE_LAYER_ITEM_ID).");
   }
 
-  private getFeatureLayer(): Promise<FeatureLayer> {
-    if (this.featureLayer) return Promise.resolve(this.featureLayer);
-    if (this.loadingLayer) return this.loadingLayer;
-    this.loadingLayer = loadAssociatedFeatureLayer(this.buildSceneLayer()).then((layer) => {
-      this.featureLayer = layer;
-      return layer;
+  /**
+   * Loads (once) and caches both the `SceneLayer` and its associated
+   * `FeatureLayer` as a single shared pair, so the exact instance used for
+   * `applyEdits()` (via `getFeatureLayer()`) is also the one rendered in the
+   * visible 3D view (via `getDisplaySceneLayer()`, added by `scene-render.ts`).
+   */
+  private getLayers(): Promise<LoadedLayers> {
+    if (this.sceneLayer && this.featureLayer) {
+      return Promise.resolve({ sceneLayer: this.sceneLayer, featureLayer: this.featureLayer });
+    }
+    if (this.loadingLayers) return this.loadingLayers;
+    const sceneLayer = this.buildSceneLayer();
+    this.loadingLayers = loadAssociatedFeatureLayer(sceneLayer).then((featureLayer) => {
+      this.sceneLayer = sceneLayer;
+      this.featureLayer = featureLayer;
+      return { sceneLayer, featureLayer };
     });
-    return this.loadingLayer;
+    return this.loadingLayers;
+  }
+
+  private getFeatureLayer(): Promise<FeatureLayer> {
+    return this.getLayers().then(({ featureLayer }) => featureLayer);
+  }
+
+  /** The same `SceneLayer` instance used for editing, for `scene-render.ts` to add to the visible 3D view. */
+  getDisplaySceneLayer(): Promise<SceneLayer> {
+    return this.getLayers().then(({ sceneLayer }) => sceneLayer);
   }
 
   /** Reads the object's current transform/attributes and starts a fresh edit session for it. */

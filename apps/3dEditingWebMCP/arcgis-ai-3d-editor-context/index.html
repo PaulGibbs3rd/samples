@@ -19,8 +19,8 @@
       </calcite-navigation>
 
       <div id="app-layout">
-        <!-- Rendered only when VITE_WEBSCENE_ITEM_ID is configured; see src/main.ts -->
-        <arcgis-scene id="scene-view">
+        <!-- Removed when no test service is configured; see src/arcgis/scene-render.ts -->
+        <arcgis-scene id="scene-view" basemap="topo-3d" ground="world-elevation">
           <arcgis-zoom slot="top-left"></arcgis-zoom>
         </arcgis-scene>
 

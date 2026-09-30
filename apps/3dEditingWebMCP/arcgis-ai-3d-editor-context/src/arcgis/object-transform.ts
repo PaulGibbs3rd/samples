@@ -61,13 +61,19 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Loads (if needed) and returns the FeatureLayer associated with a 3D Object SceneLayer. */
-export async function loadAssociatedFeatureLayer(sceneLayer: SceneLayer): Promise<FeatureLayer> {
-  await sceneLayer.load();
+/** Reads a (loaded) SceneLayer's associated FeatureLayer, throwing if there isn't one. */
+export function getAssociatedFeatureLayer(sceneLayer: SceneLayer): FeatureLayer {
   const associated = (sceneLayer as unknown as { associatedLayer?: FeatureLayer | null }).associatedLayer;
   if (!associated) {
     throw new Error("SceneLayer has no associated FeatureLayer to edit.");
   }
+  return associated;
+}
+
+/** Loads (if needed) and returns the FeatureLayer associated with a 3D Object SceneLayer. */
+export async function loadAssociatedFeatureLayer(sceneLayer: SceneLayer): Promise<FeatureLayer> {
+  await sceneLayer.load();
+  const associated = getAssociatedFeatureLayer(sceneLayer);
   await associated.load();
   return associated;
 }
