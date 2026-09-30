@@ -142,6 +142,16 @@ subscribed to the same `EditorCommands` pub-sub the UI and WebMCP tools already 
   `refresh()`/cache-rebuild method is exposed on `SceneLayer` in this SDK version. The ghost preview is what
   visually reflects a proposed/just-applied rotation; the underlying cached scene geometry only reflects it after
   the service's scene cache is rebuilt server-side (out of scope here).
+- **Ruled out a client-side fix (live-verified):** the dev console logs an
+  `I3SOverrides unsupported-pcs-edits-in-global-view` warning suggesting "changing the viewing mode to display
+  edits." Setting `<arcgis-scene viewing-mode="local">` does silence that warning, but two things confirm it isn't
+  the real fix: (1) the SDK's `SceneLayer` has no `refresh()` method at all in this version, so there's no API to
+  make an already-rendered feature re-fetch its geometry after an attribute edit regardless of viewing mode; and
+  (2) applying a fresh 60° rotation with `viewing-mode="local"` active produced the same "confirmed by requery"
+  success with **zero visual change** to the rendered shape — while also breaking the ghost preview (a second
+  console warning, `Displaying a mesh with a local vertex space in a view in local viewing mode is not
+  supported`, hides it). The `viewing-mode` change was reverted; the warning is a red herring referring to
+  interactive in-view edit/sketch tools, not `esri3do_*` attribute-driven transforms.
 
 ## Project layout
 
