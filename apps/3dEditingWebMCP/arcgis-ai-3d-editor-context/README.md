@@ -21,13 +21,23 @@ The live check has been run once against a real (anonymously-readable) enterpris
 Findings from that run:
 
 - It correctly identifies `geometryType: "mesh"` and resolves the associated FeatureLayer.
-- `capabilities.query.supportsReturnMesh` is `true`, but the service's `capabilities` are currently `["View",
-  "Query"]` only — **editing is not enabled** on this test item (`supportsEditing`/`supportsAdd`/`supportsUpdate`/
-  `supportsDelete` are all `false` on both the SceneLayer and the associated FeatureLayer). This service cannot be
-  used to validate milestone 1 (edits) until it's republished/updated with editing enabled.
-- The live mesh-query probe ran and the query succeeded, but returned no mesh geometry for the configured test
-  object id with the current query parameters — recorded as a blocker rather than assumed to be a bug; needs
-  follow-up (e.g. checking `outFields`/geometry-return options) before relying on it.
+- **Update (after enabling editing on the service):** the associated FeatureLayer now reports
+  `capabilities: Query,Create,Update,Delete,Uploads,Editing,ChangeTracking` and `allowGeometryUpdates: true`, and
+  the live report shows `supportsEditing`/`supportsAdd`/`supportsUpdate`/`supportsDelete` all `true` on both the
+  SceneLayer and the associated FeatureLayer. This test item is now a viable target for validating milestone 1.
+- **GLB/glTF format confirmed present** (previously "unverified"): inspecting the associated FeatureLayer's
+  `query3d` response directly shows an `assetMaps` entry with `assetType: "3D_gltf"`,
+  `conversionStatus: "COMPLETED"`, and a working, anonymously-fetchable `assetURL` — i.e. the Khronos glTF binary
+  format required for web editing (Pro analyzer rule 24165) is present for this test feature.
+- **Open issue found while digging into the "no mesh returned" blocker:** `SceneLayer.queryFeatures({ objectIds,
+  returnGeometry: true })` still returns a feature with `geometry: null` for this item, even though
+  `supportsReturnMesh` is `true` and the glTF asset above is confirmed valid and reachable. Captured network
+  traffic shows the SDK's own query goes through `FeatureServer/0/query3d?formatOf3DObjects=3D_gltf`, which
+  returns only an envelope (bounding box) plus the transform attributes (`esri3do_tx/ty/tz`, `esri3do_rx/ry/rz/
+  rdeg`, `esri3do_sx/sy/sz`) and the asset map — it never fetches the glTF asset itself, so no `Mesh` is
+  constructed from a bare `queryFeatures()` call. The newer `SceneLayer.queryModels()`/`queryModel()` API (added
+  in more recent SDK versions specifically for 3D Object model retrieval) looks like the right tool to investigate
+  next, rather than assuming `queryFeatures()` alone is sufficient for milestone 1's mesh-read step.
 
 ## Project layout
 
@@ -90,11 +100,12 @@ The report will show:
 - No editor UI (selection, rotate, preview, apply/cancel) — that's milestone 1.
 - No WebMCP tool registration — that's milestone 2.
 - No authentication flow wired into the running app, so only public layers can be checked right now.
-- Hosted edits are unverified; the only real test item checked so far (`SeattleCube_3DObject`) has editing
-  disabled at the service level, so this repository does not claim `applyEdits()` works against any specific
-  service. Milestone 1 needs a test item republished with editing capabilities enabled first.
-- The live mesh-query probe's "no geometry returned" result against `SeattleCube_3DObject` is unexplained and
-  needs investigation before being relied upon.
+- `applyEdits()` itself has not been called yet; this repository does not claim edits actually persist against
+  `SeattleCube_3DObject` even though its capabilities now report editing is enabled.
+- `SceneLayer.queryFeatures({ returnGeometry: true })` still doesn't return a `Mesh` for `SeattleCube_3DObject`'s
+  one feature, despite a confirmed, valid, reachable glTF asset — see the investigation notes above. Milestone 1
+  should try `SceneLayer.queryModels()`/`queryModel()` instead of assuming `queryFeatures()` is the right mesh-read
+  API before building the rotate/preview/apply flow on top of it.
 
 ## Packages used
 
