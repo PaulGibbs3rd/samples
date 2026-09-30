@@ -34,12 +34,55 @@ export interface CommandResult {
   statusMessage: string;
 }
 
+export type CommandListener = (result: CommandResult) => void;
+
+function describeError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Owns the one shared edit session (and its `FeatureLayer`/inspection
+ * state) so the visible UI (`ui/editor-controller.ts`) and the WebMCP
+ * adapter (`webmcp/tool-adapter.ts`) operate on exactly the same session
+ * rather than two independent copies — per `docs/architecture.md`'s
+ * milestone 2 acceptance that "UI still works without WebMCP" and an
+ * agent's proposal must show up in the same visible preview a human sees.
+ * Call `subscribe()` to be notified of every state change regardless of
+ * which caller (UI click or WebMCP tool `execute()`) produced it.
+ */
 export class EditorCommands {
   private featureLayer: FeatureLayer | null = null;
   private loadingLayer: Promise<FeatureLayer> | null = null;
   private inspection: ObjectInspection | null = null;
+  private session: EditSession = createIdleSession();
+  private listeners = new Set<CommandListener>();
 
   constructor(private readonly config: AppConfig) {}
+
+  /** Registers a listener invoked after every command call that may have changed state; returns an unsubscribe function. */
+  subscribe(listener: CommandListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(statusMessage: string): CommandResult {
+    const result: CommandResult = { session: this.session, inspection: this.inspection, statusMessage };
+    for (const listener of this.listeners) listener(result);
+    return result;
+  }
+
+  /** Current session/inspection without triggering any SDK call or listener notification. */
+  getState(): CommandResult {
+    return { session: this.session, inspection: this.inspection, statusMessage: "" };
+  }
+
+  getConfig(): AppConfig {
+    return this.config;
+  }
+
+  isFeatureLayerLoaded(): boolean {
+    return this.featureLayer !== null;
+  }
 
   private buildSceneLayer(): SceneLayer {
     if (this.config.sceneLayerUrl) {
@@ -68,26 +111,34 @@ export class EditorCommands {
 
   /** Reads the object's current transform/attributes and starts a fresh edit session for it. */
   async selectObject(objectId: number): Promise<CommandResult> {
-    const layer = await this.getFeatureLayer();
-    this.inspection = await inspectObject(layer, objectId);
-    const next = selectObject(this.inspection.selected, this.inspection.transform);
-    return { session: next, inspection: this.inspection, statusMessage: `Selected object ${objectId}.` };
+    try {
+      const layer = await this.getFeatureLayer();
+      this.inspection = await inspectObject(layer, objectId);
+      this.session = selectObject(this.inspection.selected, this.inspection.transform);
+      return this.emit(`Selected object ${objectId}.`);
+    } catch (err) {
+      return this.emit(`Selection failed: ${describeError(err)}`);
+    }
   }
 
   /** Computes a local-only preview candidate; no service call is made. */
-  previewRotation(session: EditSession, deltaDegrees: number): CommandResult {
-    const next = proposeRotation(session, deltaDegrees);
-    return {
-      session: next,
-      inspection: this.inspection,
-      statusMessage: "Preview only — no service edit has been made yet.",
-    };
+  previewRotation(deltaDegrees: number): CommandResult {
+    try {
+      this.session = proposeRotation(this.session, deltaDegrees);
+      return this.emit("Preview only — no service edit has been made yet.");
+    } catch (err) {
+      return this.emit(`Preview failed: ${describeError(err)}`);
+    }
   }
 
   /** Discards the pending preview candidate; the original remains authoritative. */
-  discardProposal(session: EditSession): CommandResult {
-    const next = cancelProposal(session);
-    return { session: next, inspection: this.inspection, statusMessage: "Preview discarded; original value restored." };
+  discardProposal(): CommandResult {
+    try {
+      this.session = cancelProposal(this.session);
+      return this.emit("Preview discarded; original value restored.");
+    } catch (err) {
+      return this.emit(`Discard failed: ${describeError(err)}`);
+    }
   }
 
   /**
@@ -96,29 +147,32 @@ export class EditorCommands {
    * any client cache) to confirm the value actually persisted before marking
    * the session `applied`.
    */
-  async applyProposal(session: EditSession): Promise<CommandResult> {
+  async applyProposal(): Promise<CommandResult> {
+    const session = this.session;
     if (session.status !== "previewing" || !session.candidate || !session.selected) {
-      return { session, inspection: this.inspection, statusMessage: "Nothing to apply — preview a rotation first." };
+      return this.emit("Nothing to apply — preview a rotation first.");
     }
     const objectId = session.selected.objectId;
     const candidate = session.candidate;
-    let applying = beginApply(session);
+    this.session = beginApply(session);
+    this.emit("Applying edit…");
 
-    const layer = await this.getFeatureLayer();
-    const result = await applyRotation(layer, objectId, candidate, session.selected.attributes);
-    if (!result.success) {
-      applying = failApply(applying, result.error ?? "applyEdits reported failure", result);
-      return { session: applying, inspection: this.inspection, statusMessage: "Apply failed — original value kept." };
+    try {
+      const layer = await this.getFeatureLayer();
+      const result = await applyRotation(layer, objectId, candidate, session.selected.attributes);
+      if (!result.success) {
+        this.session = failApply(this.session, result.error ?? "applyEdits reported failure", result);
+        return this.emit("Apply failed — original value kept.");
+      }
+
+      const confirmed = await requeryTransform(layer, objectId);
+      this.session = completeApply(this.session, confirmed, result);
+      this.inspection = this.inspection ? { ...this.inspection, transform: confirmed } : this.inspection;
+      return this.emit(`Applied and confirmed by requery: angle is now ${confirmed.rdeg.toFixed(2)}°.`);
+    } catch (err) {
+      this.session = failApply(this.session, describeError(err), null);
+      return this.emit("Apply failed — original value kept.");
     }
-
-    const confirmed = await requeryTransform(layer, objectId);
-    applying = completeApply(applying, confirmed, result);
-    this.inspection = this.inspection ? { ...this.inspection, transform: confirmed } : this.inspection;
-    return {
-      session: applying,
-      inspection: this.inspection,
-      statusMessage: `Applied and confirmed by requery: angle is now ${confirmed.rdeg.toFixed(2)}°.`,
-    };
   }
 }
 

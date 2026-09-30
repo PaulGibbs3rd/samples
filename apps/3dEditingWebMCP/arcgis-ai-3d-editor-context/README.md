@@ -4,11 +4,11 @@ TypeScript browser app scaffolded with [`@arcgis/create`](https://www.npmjs.com/
 ArcGIS Maps SDK for JavaScript template). See [`docs/architecture.md`](./docs/architecture.md) for the full design
 and milestone plan, and [`AGENTS.md`](./AGENTS.md) for the agent workflow.
 
-## Status: milestone 1 — rotate/preview/apply editor
+## Status: milestone 2 — WebMCP tool registration
 
-Milestone 0's capability report and milestone 1's rotate/preview/apply/cancel editor are both implemented and
-live-verified end-to-end against a real enterprise test service. See "Data and editing prerequisites" and the
-milestone plan in `docs/architecture.md`.
+Milestone 0's capability report, milestone 1's rotate/preview/apply/cancel editor, and milestone 2's WebMCP tool
+surface are all implemented and live-verified end-to-end against a real enterprise test service. See "Data and
+editing prerequisites" and the milestone plan in `docs/architecture.md`.
 
 **No credentials or real service URLs are committed to this repository** — `.env` is git-ignored. Running the
 app without a local `.env` shows an explicit demo fixture, clearly labeled as such. See
@@ -65,6 +65,42 @@ Both milestones have been run against a real (anonymously-readable, editing-enab
   resolved promise alone, per `docs/architecture.md`'s explicit warning) proved its value here: it correctly
   surfaced the `globalid` error as an apply failure instead of a false success.
 
+### Milestone 2 findings
+
+- Per `docs/architecture.md`'s WebMCP surface table, exactly five tools are registered in `src/webmcp/tool-adapter.ts`:
+  `get_scene`, `get_selection`, `inspect_selected_object`, `propose_rotation`, `discard_proposal`. `apply_proposal`
+  is intentionally **not** registered — persistence stays behind the app's own visible Apply button (the human
+  approval gate), and a WebMCP tool call must never be treated as that approval.
+  - `readOnlyHint: true` on the three read tools; `inspect_selected_object` also sets `untrustedContentHint: true`
+    since it surfaces service-sourced attributes. `propose_rotation`/`discard_proposal` set `consequentialHint:
+    false` since neither writes to the service.
+- **Refactored `EditorCommands` to own the shared edit session** (`src/editing/commands.ts`) with a
+  `subscribe()`/`emit()` pub-sub mechanism, and changed `mountEditor()` (`src/ui/editor-controller.ts`) to accept
+  an already-constructed `EditorCommands` instance rather than building its own. This was necessary so a WebMCP
+  tool call and a human's button click operate on **exactly one** session — otherwise an agent's
+  `propose_rotation` call would not show up in the human-visible preview. `main.ts` now constructs one
+  `EditorCommands` instance and passes it to both `mountEditor()` and `registerWebMcpTools()`.
+- **Pure summaries** (`src/webmcp/summaries.ts`, unit tested) filter tool output down to small, curated
+  JSON-serializable objects — `esri3do_*` transform fields, footprint extent, session status/angles — rather
+  than returning raw query attributes, per architecture.md's "treat layer names, attributes, and other service
+  content as untrusted input when surfaced to an agent."
+- **No official TypeScript types exist yet** for Chrome's WebMCP imperative API (`document.modelContext`); hand-
+  written ambient declarations live in `src/webmcp/types.ts`. Feature detection (`src/webmcp/feature-detection.ts`)
+  guards registration so the app works identically with or without a WebMCP-capable browser.
+- **Live-verified with a mocked `document.modelContext`** (no WebMCP-flagged Chrome build was available in this
+  environment — see "Known limitation" below): confirmed all five tools register with the correct names/
+  annotations, and that calling the mocked `propose_rotation` tool's `execute({ deltaDegrees: 42 })` after
+  selecting object 1 through the visible UI produced the same "Preview only — not saved: 42.00°" preview a human
+  would see, enabled Apply/Cancel, and made **no service write** (confirmed no REST query changes occurred).
+  `discard_proposal` correctly reverted it. Separately, the real end-to-end select → preview → apply → requery
+  flow was re-verified live against `SeattleCube_3DObject` (`OBJECTID=1`) after the `EditorCommands` refactor, and
+  the feature was reset back to `esri3do_rdeg = 0.0` afterward.
+- **Known limitation:** milestone 2's acceptance criterion "a compatible agent discovers tools and proposes a
+  rotation" has only been verified against a manually mocked `document.modelContext` in Playwright's Chromium,
+  which does not itself implement the WebMCP API. No WebMCP-enabled browser/agent host was available in this
+  environment to verify true end-to-end discovery and invocation by a real agent. The tool registration code,
+  shared-state wiring, and tool `execute()` behavior are verified; genuine agent discovery is not.
+
 ## Project layout
 
 ```text
@@ -76,14 +112,15 @@ src/
   editing/  milestone 1's pure edit-session state machine (edit-session.ts) and the shared
             EditorCommands class (commands.ts) that owns the FeatureLayer + every SDK call
   geometry/ pure rotation/transform math (transform.ts) — no @arcgis/core import, fully unit tested
-  webmcp/   reserved for milestone 2 (WebMCP tool registration); will call into editing/commands.ts
+  webmcp/   milestone 2's WebMCP tool registration: types.ts (ambient document.modelContext types),
+            feature-detection.ts, summaries.ts (pure tool-result summaries), tool-adapter.ts (registerWebMcpTools)
   auth/     optional OAuth helper for secured portals (not wired up by default)
 ```
 
-`src/arcgis/capability-interpret.ts`, `src/geometry/transform.ts`, and `src/editing/edit-session.ts` are pure (no
-`@arcgis/core` import) so they can be unit tested with small deterministic fixtures instead of a live service;
-`src/arcgis/capability-check.ts` and `src/arcgis/object-transform.ts` are the thin orchestration layers that call
-the SDK and feed it plain data.
+`src/arcgis/capability-interpret.ts`, `src/geometry/transform.ts`, `src/editing/edit-session.ts`, and
+`src/webmcp/summaries.ts` are pure (no `@arcgis/core` import) so they can be unit tested with small deterministic
+fixtures instead of a live service; `src/arcgis/capability-check.ts` and `src/arcgis/object-transform.ts` are the
+thin orchestration layers that call the SDK and feed it plain data.
 
 ## Get started
 

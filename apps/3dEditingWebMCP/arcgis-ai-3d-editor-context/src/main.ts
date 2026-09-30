@@ -15,6 +15,8 @@ import { checkSceneLayerCapabilities } from "./arcgis/capability-check.js";
 import { DEMO_CAPABILITY_REPORT } from "./arcgis/demo-fixture.js";
 import { renderCapabilityReport } from "./ui/capability-report-view.js";
 import { mountEditor } from "./ui/editor-controller.js";
+import { EditorCommands } from "./editing/commands.js";
+import { registerWebMcpTools } from "./webmcp/tool-adapter.js";
 import type { CapabilityReport } from "./arcgis/types.js";
 
 const config = loadConfig();
@@ -104,6 +106,7 @@ if (
   cancelButton
 ) {
   if (hasSceneLayerTarget(config)) {
+    const commands = new EditorCommands(config);
     mountEditor(
       {
         panel: editorPanel,
@@ -114,8 +117,12 @@ if (
         applyButton,
         cancelButton,
       },
-      config,
+      commands,
     );
+    // Milestone 2: expose read tools + propose/discard to a WebMCP-compatible
+    // agent host, sharing this exact `commands` instance with the UI above so
+    // an agent's proposal shows up in the same visible preview a human sees.
+    registerWebMcpTools(commands);
     if (config.testObjectId !== null) {
       objectIdInput.value = String(config.testObjectId);
     }

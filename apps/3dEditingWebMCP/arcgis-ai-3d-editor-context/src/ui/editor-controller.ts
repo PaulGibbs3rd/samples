@@ -5,10 +5,17 @@
  * re-renders. Keep it free of `@arcgis/core` imports so the SDK boundary
  * stays in `editing/` and `arcgis/`, per `docs/architecture.md`'s module
  * layout.
+ *
+ * The `EditorCommands` instance is created by the caller (`main.ts`) and
+ * passed in rather than constructed here, so the same instance can also be
+ * handed to `webmcp/tool-adapter.ts` (milestone 2) — both the visible UI and
+ * WebMCP tools must observe and mutate exactly one shared edit session.
+ * `commands.subscribe()` re-renders on every change regardless of whether a
+ * button click or a WebMCP tool call produced it, which is what lets an
+ * agent's `propose_rotation` call show up in this same visible preview.
  */
-import type { AppConfig } from "../arcgis/config.js";
-import { EditorCommands, createIdleSession, type EditSession } from "../editing/commands.js";
-import type { ObjectInspection } from "../arcgis/object-transform.js";
+import { createIdleSession } from "../editing/edit-session.js";
+import type { EditorCommands } from "../editing/commands.js";
 import { renderEditorPanel } from "./editor-view.js";
 
 export interface EditorElements {
@@ -21,85 +28,63 @@ export interface EditorElements {
   cancelButton: HTMLButtonElement;
 }
 
-function describeError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-export function mountEditor(elements: EditorElements, config: AppConfig): void {
-  const commands = new EditorCommands(config);
-  let session: EditSession = createIdleSession();
-  let inspection: ObjectInspection | null = null;
-
-  function setButtonsForStatus(): void {
-    const hasSelection = session.status !== "idle";
-    const isPreviewing = session.status === "previewing";
-    const isBusy = session.status === "applying";
+export function mountEditor(elements: EditorElements, commands: EditorCommands): void {
+  function setButtonsForStatus(status: string): void {
+    const hasSelection = status !== "idle";
+    const isPreviewing = status === "previewing";
+    const isBusy = status === "applying";
     elements.previewButton.disabled = !hasSelection || isBusy;
     elements.applyButton.disabled = !isPreviewing || isBusy;
     elements.cancelButton.disabled = !isPreviewing || isBusy;
     elements.selectButton.disabled = isBusy;
   }
 
-  function render(statusMessage: string): void {
+  function renderNow(statusMessage: string): void {
+    const { session, inspection } = commands.getState();
     renderEditorPanel(elements.panel, { session, inspection, statusMessage });
-    setButtonsForStatus();
+    setButtonsForStatus(session.status);
   }
+
+  // Re-render on every state change, whether it came from a button click
+  // below or from a WebMCP tool's execute() running in the background.
+  commands.subscribe(({ session, inspection, statusMessage }) => {
+    renderEditorPanel(elements.panel, { session, inspection, statusMessage });
+    setButtonsForStatus(session.status);
+  });
 
   elements.selectButton.addEventListener("click", () => {
     void (async () => {
       const objectId = Number(elements.objectIdInput.value);
       if (!Number.isFinite(objectId)) {
-        render("Enter a numeric object id to select.");
+        renderNow("Enter a numeric object id to select.");
         return;
       }
-      render("Loading feature…");
-      try {
-        const result = await commands.selectObject(objectId);
-        session = result.session;
-        inspection = result.inspection;
-        render(result.statusMessage);
-      } catch (err) {
-        session = createIdleSession();
-        inspection = null;
-        render(`Selection failed: ${describeError(err)}`);
-      }
+      renderNow("Loading feature…");
+      await commands.selectObject(objectId);
     })();
   });
 
   elements.previewButton.addEventListener("click", () => {
     const delta = Number(elements.angleInput.value);
     if (!Number.isFinite(delta)) {
-      render("Enter a finite rotation angle (degrees) to preview.");
+      renderNow("Enter a finite rotation angle (degrees) to preview.");
       return;
     }
-    try {
-      const result = commands.previewRotation(session, delta);
-      session = result.session;
-      render(result.statusMessage);
-    } catch (err) {
-      render(`Preview failed: ${describeError(err)}`);
-    }
+    commands.previewRotation(delta);
   });
 
   elements.cancelButton.addEventListener("click", () => {
-    const result = commands.discardProposal(session);
-    session = result.session;
-    render(result.statusMessage);
+    commands.discardProposal();
   });
 
   elements.applyButton.addEventListener("click", () => {
-    void (async () => {
-      render("Applying edit…");
-      try {
-        const result = await commands.applyProposal(session);
-        session = result.session;
-        inspection = result.inspection;
-        render(result.statusMessage);
-      } catch (err) {
-        render(`Apply failed: ${describeError(err)}`);
-      }
-    })();
+    void commands.applyProposal();
   });
 
-  render("Enter an object id and select it to begin.");
+  renderEditorPanel(elements.panel, {
+    session: createIdleSession(),
+    inspection: null,
+    statusMessage: "Enter an object id and select it to begin.",
+  });
+  setButtonsForStatus("idle");
 }
