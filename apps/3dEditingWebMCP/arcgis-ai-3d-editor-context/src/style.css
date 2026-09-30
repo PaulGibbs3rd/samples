@@ -1,0 +1,98 @@
+html,
+body {
+  background-color: var(--calcite-ui-foreground-2);
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+#app-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  height: 100%;
+}
+
+arcgis-scene {
+  height: 100%;
+  width: 100%;
+}
+
+#capability-panel {
+  overflow-y: auto;
+  padding: 1rem;
+  box-sizing: border-box;
+  border-left: 1px solid #ccc;
+  background: #fff;
+}
+
+.config-summary {
+  font-size: 0.85rem;
+  color: #555;
+  word-break: break-all;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: #333;
+  min-height: 1.2em;
+}
+
+.capability-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.capability-table th,
+.capability-table td {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.support-yes {
+  color: #0a7d1f;
+  font-weight: 600;
+}
+
+.support-no {
+  color: #b0281c;
+  font-weight: 600;
+}
+
+.support-unknown {
+  color: #9a7b00;
+  font-style: italic;
+}
+
+.report-mode {
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+}
+
+.report-mode--live {
+  background: #e6f4ea;
+}
+
+.report-mode--demo-fixture {
+  background: #fff4e5;
+}
+
+.report-mode--not-configured {
+  background: #fdecea;
+}
+
+.report-mode .timestamp {
+  float: right;
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.empty {
+  color: #777;
+  font-style: italic;
+}
+
