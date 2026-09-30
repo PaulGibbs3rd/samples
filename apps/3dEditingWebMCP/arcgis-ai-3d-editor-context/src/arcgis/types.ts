@@ -46,6 +46,15 @@ export interface MeshQueryProbe {
   objectId: number | null;
   success: boolean | null;
   hasMesh: boolean | null;
+  /**
+   * True when the feature's `esri3do_*` transform attributes (translation,
+   * scale, rotation axis/degrees) came back on the query. 3D Object
+   * SceneLayer features always resolve `geometry` to an empty placeholder
+   * `Mesh` (0 vertices) over the public query API — the real editable
+   * transform lives in these attributes, not in mesh vertex data. See
+   * README "Milestone 1" notes for the live-verified evidence.
+   */
+  hasTransformAttributes: boolean | null;
   error: string | null;
 }
 

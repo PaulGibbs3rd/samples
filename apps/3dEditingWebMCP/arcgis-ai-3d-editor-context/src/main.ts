@@ -14,6 +14,7 @@ import { hasSceneLayerTarget, loadConfig } from "./arcgis/config.js";
 import { checkSceneLayerCapabilities } from "./arcgis/capability-check.js";
 import { DEMO_CAPABILITY_REPORT } from "./arcgis/demo-fixture.js";
 import { renderCapabilityReport } from "./ui/capability-report-view.js";
+import { mountEditor } from "./ui/editor-controller.js";
 import type { CapabilityReport } from "./arcgis/types.js";
 
 const config = loadConfig();
@@ -82,3 +83,45 @@ runButton?.addEventListener("click", () => {
 
 // Run once on load so the page is useful without interaction.
 void runCapabilityCheck();
+
+// Milestone 1 editor: only wired up when a real test service is configured —
+// there is nothing meaningful to select/rotate/apply against the demo fixture.
+const editorPanel = document.querySelector<HTMLElement>("#editor-report");
+const objectIdInput = document.querySelector<HTMLInputElement>("#object-id-input");
+const selectButton = document.querySelector<HTMLButtonElement>("#select-object");
+const angleInput = document.querySelector<HTMLInputElement>("#rotate-angle-input");
+const previewButton = document.querySelector<HTMLButtonElement>("#preview-rotation");
+const applyButton = document.querySelector<HTMLButtonElement>("#apply-rotation");
+const cancelButton = document.querySelector<HTMLButtonElement>("#cancel-rotation");
+
+if (
+  editorPanel &&
+  objectIdInput &&
+  selectButton &&
+  angleInput &&
+  previewButton &&
+  applyButton &&
+  cancelButton
+) {
+  if (hasSceneLayerTarget(config)) {
+    mountEditor(
+      {
+        panel: editorPanel,
+        objectIdInput,
+        selectButton,
+        angleInput,
+        previewButton,
+        applyButton,
+        cancelButton,
+      },
+      config,
+    );
+    if (config.testObjectId !== null) {
+      objectIdInput.value = String(config.testObjectId);
+    }
+  } else {
+    editorPanel.innerHTML =
+      '<p class="empty">No test service configured — set VITE_SCENE_LAYER_URL or VITE_SCENE_LAYER_ITEM_ID to use the editor.</p>';
+    for (const button of [selectButton, previewButton, applyButton, cancelButton]) button.disabled = true;
+  }
+}

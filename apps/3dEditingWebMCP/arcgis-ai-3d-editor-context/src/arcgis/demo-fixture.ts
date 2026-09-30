@@ -43,6 +43,7 @@ export const DEMO_CAPABILITY_REPORT: CapabilityReport = {
     objectId: null,
     success: null,
     hasMesh: null,
+    hasTransformAttributes: null,
     error: null,
   },
   blockers: [

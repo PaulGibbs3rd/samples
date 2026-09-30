@@ -24,17 +24,41 @@
           <arcgis-zoom slot="top-left"></arcgis-zoom>
         </arcgis-scene>
 
-        <section id="capability-panel" aria-label="Capability check">
-          <header>
-            <h2>Capability check</h2>
-            <p id="config-summary" class="config-summary"></p>
-            <button id="run-check" type="button">Run capability check</button>
-            <p id="capability-status" role="status" class="status"></p>
-          </header>
-          <div id="capability-report"></div>
-        </section>
+        <div id="side-panels">
+          <section id="capability-panel" aria-label="Capability check">
+            <header>
+              <h2>Capability check</h2>
+              <p id="config-summary" class="config-summary"></p>
+              <button id="run-check" type="button">Run capability check</button>
+              <p id="capability-status" role="status" class="status"></p>
+            </header>
+            <div id="capability-report"></div>
+          </section>
+
+          <section id="editor-panel" aria-label="3D object editor">
+            <header>
+              <h2>Editor — milestone 1</h2>
+              <div class="editor-controls">
+                <label for="object-id-input">Object id</label>
+                <input id="object-id-input" type="number" step="1" placeholder="1" />
+                <button id="select-object" type="button">Select</button>
+              </div>
+              <div class="editor-controls">
+                <label for="rotate-angle-input">Rotate by (degrees)</label>
+                <input id="rotate-angle-input" type="number" step="1" value="15" />
+                <button id="preview-rotation" type="button" disabled>Preview</button>
+              </div>
+              <div class="editor-controls">
+                <button id="apply-rotation" type="button" disabled>Apply</button>
+                <button id="cancel-rotation" type="button" disabled>Cancel</button>
+              </div>
+            </header>
+            <div id="editor-report"></div>
+          </section>
+        </div>
       </div>
     </calcite-shell>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
+
