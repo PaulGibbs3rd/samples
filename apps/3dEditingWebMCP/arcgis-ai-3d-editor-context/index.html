@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ArcGIS AI 3D Editor — Milestone 0: capability check</title>
+    <link rel="icon" href="data:;base64,=" />
+  </head>
+
+  <body>
+    <calcite-shell content-behind>
+      <calcite-navigation slot="header">
+        <calcite-navigation-logo
+          heading-level="1"
+          heading="ArcGIS AI 3D Editor"
+          description="Milestone 0 — SceneLayer/FeatureLayer capability check"
+          slot="logo"
+        ></calcite-navigation-logo>
+      </calcite-navigation>
+
+      <div id="app-layout">
+        <!-- Rendered only when VITE_WEBSCENE_ITEM_ID is configured; see src/main.ts -->
+        <arcgis-scene id="scene-view">
+          <arcgis-zoom slot="top-left"></arcgis-zoom>
+        </arcgis-scene>
+
+        <section id="capability-panel" aria-label="Capability check">
+          <header>
+            <h2>Capability check</h2>
+            <p id="config-summary" class="config-summary"></p>
+            <button id="run-check" type="button">Run capability check</button>
+            <p id="capability-status" role="status" class="status"></p>
+          </header>
+          <div id="capability-report"></div>
+        </section>
+      </div>
+    </calcite-shell>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
