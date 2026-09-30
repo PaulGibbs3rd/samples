@@ -12,9 +12,22 @@ change-tracking capabilities (see "Data and editing prerequisites" in `docs/arch
 rotate/preview/apply vertical slice) has not been implemented — do it only once a capability report from a real
 test service shows editing is actually possible.
 
-**No credentialed or editable test service is configured in this repository.** Running the app without
-configuration shows an explicit demo fixture, clearly labeled as such, with a blocker explaining that hosted
-edits have not been verified. See [Configure a real test service](#configure-a-real-test-service) below.
+**No credentials or real service URLs are committed to this repository** — `.env` is git-ignored. Running the
+app without a local `.env` shows an explicit demo fixture, clearly labeled as such. See
+[Configure a real test service](#configure-a-real-test-service) below for how to point it at one.
+
+The live check has been run once against a real (anonymously-readable) enterprise test item —
+`SeattleCube_3DObject`, a single disposable cube published as a 3D Object SceneLayer + associated FeatureLayer.
+Findings from that run:
+
+- It correctly identifies `geometryType: "mesh"` and resolves the associated FeatureLayer.
+- `capabilities.query.supportsReturnMesh` is `true`, but the service's `capabilities` are currently `["View",
+  "Query"]` only — **editing is not enabled** on this test item (`supportsEditing`/`supportsAdd`/`supportsUpdate`/
+  `supportsDelete` are all `false` on both the SceneLayer and the associated FeatureLayer). This service cannot be
+  used to validate milestone 1 (edits) until it's republished/updated with editing enabled.
+- The live mesh-query probe ran and the query succeeded, but returned no mesh geometry for the configured test
+  object id with the current query parameters — recorded as a blocker rather than assumed to be a bug; needs
+  follow-up (e.g. checking `outFields`/geometry-return options) before relying on it.
 
 ## Project layout
 
@@ -77,7 +90,11 @@ The report will show:
 - No editor UI (selection, rotate, preview, apply/cancel) — that's milestone 1.
 - No WebMCP tool registration — that's milestone 2.
 - No authentication flow wired into the running app, so only public layers can be checked right now.
-- Hosted edits are unverified; this repository does not claim `applyEdits()` works against any specific service.
+- Hosted edits are unverified; the only real test item checked so far (`SeattleCube_3DObject`) has editing
+  disabled at the service level, so this repository does not claim `applyEdits()` works against any specific
+  service. Milestone 1 needs a test item republished with editing capabilities enabled first.
+- The live mesh-query probe's "no geometry returned" result against `SeattleCube_3DObject` is unexplained and
+  needs investigation before being relied upon.
 
 ## Packages used
 
