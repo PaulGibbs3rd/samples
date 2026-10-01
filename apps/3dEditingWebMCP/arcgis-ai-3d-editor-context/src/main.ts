@@ -9,6 +9,9 @@ import "@esri/calcite-components/components/calcite-navigation";
 import "@esri/calcite-components/components/calcite-navigation-logo";
 import "@arcgis/map-components/components/arcgis-scene";
 import "@arcgis/map-components/components/arcgis-zoom";
+import "@arcgis/map-components/components/arcgis-expand";
+import "@arcgis/map-components/components/arcgis-layer-list";
+import "@arcgis/map-components/components/arcgis-basemap-gallery";
 
 import { hasSceneLayerTarget, loadConfig } from "./arcgis/config.js";
 import { checkSceneLayerCapabilities } from "./arcgis/capability-check.js";
