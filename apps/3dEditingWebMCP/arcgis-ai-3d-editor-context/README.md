@@ -175,16 +175,22 @@ subscribed to the same `EditorCommands` pub-sub the UI and WebMCP tools already 
 - **Live-verified against `SeattleCube_3DObject`:** selecting object 1 and clicking Preview shows the ghost mesh
   appear, rotated relative to the real (solid) rendered feature beneath it; changing the angle and previewing
   again updates the ghost's rotation live; Cancel hides the ghost; Apply persists the edit (confirmed by requery,
-  same as milestone 1) and hides the ghost.
+  same as milestone 1).
 - **Scope decision:** the real SceneLayer-rendered feature is intentionally left visible (solid) underneath the
   translucent ghost during preview, rather than attempting to hide/filter it via `SceneLayerView` — the ghost
   overlay alone satisfies "see the rotation," and hiding the live feature would need a riskier, unverified API.
 - **Known limitation: the real feature's rendering does not visually update after Apply.** 3D Object SceneLayers
   serve pre-tiled scene-cache nodes from the server; editing the `esri3do_*` attributes (confirmed correct via
   requery) does not itself invalidate or regenerate those cached tiles client-side, and no client-callable
-  `refresh()`/cache-rebuild method is exposed on `SceneLayer` in this SDK version. The ghost preview is what
-  visually reflects a proposed/just-applied rotation; the underlying cached scene geometry only reflects it after
-  the service's scene cache is rebuilt server-side (out of scope here).
+  `refresh()`/cache-rebuild method is exposed on `SceneLayer` in this SDK version. The underlying cached scene
+  geometry only reflects an edit after the service's scene cache is rebuilt server-side (out of scope here).
+- **Workaround: the ghost stays visible after a successful Apply, in a distinct color.** Since the real feature
+  can't be made to visually update, `scene-preview.ts`'s `syncGhost()` no longer hides the ghost once
+  `session.status` leaves `"previewing"`. Instead, once an edit is applied and confirmed by requery, the ghost is
+  kept on screen showing `session.original` (the persisted transform) using a teal/more-opaque `APPLIED_SYMBOL`,
+  distinct from the amber/translucent `PREVIEW_SYMBOL` used for a pending, unconfirmed preview. This is what lets
+  a human visually confirm "the edit took effect" without a server-side cache rebuild. The ghost is cleared again
+  only when a different object is selected (or the session returns to a genuinely unedited "selected" state).
 - **Ruled out a client-side fix (live-verified):** the dev console logs an
   `I3SOverrides unsupported-pcs-edits-in-global-view` warning suggesting "changing the viewing mode to display
   edits." Setting `<arcgis-scene viewing-mode="local">` does silence that warning, but two things confirm it isn't

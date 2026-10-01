@@ -11,6 +11,14 @@
  * (not hidden/filtered out) — the translucent ghost overlay is enough to see
  * "candidate vs. persisted" side by side without the added risk of a 3D
  * Object SceneLayerView feature-effect API that milestone 0 never verified.
+ *
+ * 3D Object SceneLayers serve pre-baked, server-side scene-cache geometry
+ * that does not regenerate when `esri3do_*` attributes change (see
+ * README.md's "known limitation"), so the real rendered feature stays
+ * visually unchanged after a confirmed Apply. To still let a human *see*
+ * the edit took effect, the ghost is kept on screen after a successful
+ * Apply too — using a distinct "confirmed" symbol — instead of being
+ * hidden once `session.status` leaves `"previewing"`.
  */
 import Graphic from "@arcgis/core/Graphic.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
@@ -23,8 +31,18 @@ import type { EditSession } from "../editing/edit-session.js";
 import type { EditorCommands } from "../editing/commands.js";
 import type { ObjectTransform } from "../geometry/transform.js";
 
-const GHOST_SYMBOL = new MeshSymbol3D({
+/** Pending, unconfirmed preview candidate — amber/translucent. */
+const PREVIEW_SYMBOL = new MeshSymbol3D({
   symbolLayers: [{ type: "fill", material: { color: [255, 140, 0, 0.45] } }],
+});
+
+/**
+ * Service-confirmed, applied transform — teal/more opaque, standing in for
+ * the real feature's geometry until the SceneLayer's server-side cache is
+ * rebuilt (outside this app's scope).
+ */
+const APPLIED_SYMBOL = new MeshSymbol3D({
+  symbolLayers: [{ type: "fill", material: { color: [0, 168, 150, 0.7] } }],
 });
 
 function describeError(err: unknown): string {
@@ -58,26 +76,35 @@ export function mountScenePreview(commands: EditorCommands, onError?: (message: 
     }
   }
 
-  function showGhost(transform: ObjectTransform): void {
+  function showGhost(transform: ObjectTransform, symbol: MeshSymbol3D): void {
     if (!baseMesh) return;
     const mesh = baseMesh.clone();
     applyTransformToMesh(mesh, transform);
     if (ghostGraphic) {
       ghostGraphic.geometry = mesh;
+      ghostGraphic.symbol = symbol;
     } else {
-      ghostGraphic = new Graphic({ geometry: mesh, symbol: GHOST_SYMBOL });
+      ghostGraphic = new Graphic({ geometry: mesh, symbol });
       graphicsLayer.add(ghostGraphic);
     }
   }
 
+  /**
+   * Decides what (if anything) the ghost should show for the current
+   * session. A pending preview always wins (amber, unconfirmed). Once a
+   * preview has been applied and confirmed by requery, the ghost keeps
+   * showing `session.original` (now the persisted transform) in a distinct
+   * "confirmed" color — standing in for the real feature's geometry, which
+   * cannot be made to visually update client-side (see module doc comment).
+   * The ghost only disappears once a different object is selected or the
+   * session returns to a genuinely unedited "selected" state.
+   */
   function syncGhost(session: EditSession): void {
-    if (
-      session.status === "previewing" &&
-      session.candidate &&
-      baseMesh &&
-      session.selected?.objectId === currentObjectId
-    ) {
-      showGhost(session.candidate);
+    const sameObject = baseMesh && session.selected?.objectId === currentObjectId;
+    if (session.status === "previewing" && session.candidate && sameObject) {
+      showGhost(session.candidate, PREVIEW_SYMBOL);
+    } else if (session.status === "applied" && session.original && sameObject) {
+      showGhost(session.original, APPLIED_SYMBOL);
     } else {
       hideGhost();
     }
