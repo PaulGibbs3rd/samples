@@ -17,12 +17,43 @@ arcgis-scene {
   width: 100%;
 }
 
-#capability-panel {
+#side-panels {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid #ccc;
+}
+
+#capability-panel,
+#editor-panel {
   overflow-y: auto;
   padding: 1rem;
   box-sizing: border-box;
-  border-left: 1px solid #ccc;
   background: #fff;
+  flex: 1 1 50%;
+  min-height: 0;
+}
+
+#editor-panel {
+  border-top: 1px solid #ccc;
+}
+
+.editor-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.editor-controls label {
+  font-size: 0.85rem;
+  color: #333;
+}
+
+.editor-controls input {
+  width: 6rem;
+  padding: 0.2rem 0.4rem;
 }
 
 .config-summary {

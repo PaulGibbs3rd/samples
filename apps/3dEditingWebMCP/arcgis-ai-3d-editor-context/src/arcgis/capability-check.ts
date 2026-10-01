@@ -13,6 +13,7 @@ import type FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 import type { AppConfig } from "./config.js";
 import { interpretFeatureLayerCapabilities, interpretSceneLayerCapabilities } from "./capability-interpret.js";
 import type { CapabilityReport, MeshQueryProbe } from "./types.js";
+import { TRANSFORM_ANGLE_FIELD } from "./object-transform.js";
 
 function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -101,6 +102,7 @@ export async function checkSceneLayerCapabilities(config: AppConfig): Promise<Ca
     objectId: config.testObjectId,
     success: null,
     hasMesh: null,
+    hasTransformAttributes: null,
     error: null,
   };
 
@@ -114,18 +116,36 @@ export async function checkSceneLayerCapabilities(config: AppConfig): Promise<Ca
   } else {
     meshQueryProbe.attempted = true;
     try {
+      // outFields must be non-empty (e.g. "*") or the service never resolves
+      // geometry at all — live-verified: outFields: [] returns geometry: null,
+      // while outFields: ["*"] returns a Mesh instance (see README).
       const result = await sceneLayer.queryFeatures({
         objectIds: [config.testObjectId],
         returnGeometry: true,
-        outFields: [],
+        outFields: ["*"],
       });
       const feature = result.features[0];
       meshQueryProbe.success = Boolean(feature);
       meshQueryProbe.hasMesh = Boolean(feature?.geometry);
+      meshQueryProbe.hasTransformAttributes = Boolean(
+        feature && typeof feature.attributes?.[TRANSFORM_ANGLE_FIELD] === "number",
+      );
       if (!feature) {
         blockers.push(`Test object id ${config.testObjectId} was not returned by queryFeatures; confirm it exists.`);
       } else if (!feature.geometry) {
         blockers.push(`Query for object id ${config.testObjectId} succeeded but returned no mesh geometry.`);
+      } else {
+        notes.push(
+          "3D Object SceneLayer features resolve geometry to an empty placeholder Mesh (0 vertices) over the " +
+            "public query API; this is expected, not a blocker. The editable transform lives in the " +
+            `esri3do_* attributes (see "hasTransformAttributes" above), not in mesh vertex data.`,
+        );
+      }
+      if (feature && !meshQueryProbe.hasTransformAttributes) {
+        blockers.push(
+          `Test object id ${config.testObjectId} is missing the ${TRANSFORM_ANGLE_FIELD} attribute; milestone 1's ` +
+            "rotation editing needs the esri3do_* transform fields on the associated FeatureLayer.",
+        );
       }
     } catch (err) {
       meshQueryProbe.success = false;

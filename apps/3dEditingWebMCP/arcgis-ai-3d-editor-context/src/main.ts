@@ -9,11 +9,18 @@ import "@esri/calcite-components/components/calcite-navigation";
 import "@esri/calcite-components/components/calcite-navigation-logo";
 import "@arcgis/map-components/components/arcgis-scene";
 import "@arcgis/map-components/components/arcgis-zoom";
+import "@arcgis/map-components/components/arcgis-expand";
+import "@arcgis/map-components/components/arcgis-layer-list";
+import "@arcgis/map-components/components/arcgis-basemap-gallery";
 
 import { hasSceneLayerTarget, loadConfig } from "./arcgis/config.js";
 import { checkSceneLayerCapabilities } from "./arcgis/capability-check.js";
 import { DEMO_CAPABILITY_REPORT } from "./arcgis/demo-fixture.js";
+import { mountSceneView } from "./arcgis/scene-render.js";
 import { renderCapabilityReport } from "./ui/capability-report-view.js";
+import { mountEditor } from "./ui/editor-controller.js";
+import { EditorCommands } from "./editing/commands.js";
+import { registerWebMcpTools } from "./webmcp/tool-adapter.js";
 import type { CapabilityReport } from "./arcgis/types.js";
 
 const config = loadConfig();
@@ -28,17 +35,6 @@ if (configSummaryEl) {
   configSummaryEl.textContent = hasSceneLayerTarget(config)
     ? `Target: ${config.sceneLayerUrl ?? `portal item ${config.sceneLayerItemId}`}`
     : "Target: none configured — showing demo fixture (see .env.example).";
-}
-
-// Only render a live 3D scene when a WebScene item id is configured.
-// Milestone 0 focuses on the capability report; the interactive editor UI
-// around this scene is milestone 1.
-if (sceneEl) {
-  if (config.webSceneItemId) {
-    sceneEl.setAttribute("item-id", config.webSceneItemId);
-  } else {
-    sceneEl.remove();
-  }
 }
 
 function setStatus(message: string): void {
@@ -82,3 +78,83 @@ runButton?.addEventListener("click", () => {
 
 // Run once on load so the page is useful without interaction.
 void runCapabilityCheck();
+
+// Milestone 1 editor: only wired up when a real test service is configured —
+// there is nothing meaningful to select/rotate/apply against the demo fixture.
+const editorPanel = document.querySelector<HTMLElement>("#editor-report");
+const objectIdInput = document.querySelector<HTMLInputElement>("#object-id-input");
+const selectButton = document.querySelector<HTMLButtonElement>("#select-object");
+const angleInput = document.querySelector<HTMLInputElement>("#rotate-angle-input");
+const previewButton = document.querySelector<HTMLButtonElement>("#preview-rotation");
+const applyButton = document.querySelector<HTMLButtonElement>("#apply-rotation");
+const cancelButton = document.querySelector<HTMLButtonElement>("#cancel-rotation");
+const translateXInput = document.querySelector<HTMLInputElement>("#translate-x-input");
+const translateYInput = document.querySelector<HTMLInputElement>("#translate-y-input");
+const translateZInput = document.querySelector<HTMLInputElement>("#translate-z-input");
+const previewTranslateButton = document.querySelector<HTMLButtonElement>("#preview-translation");
+const scaleFactorInput = document.querySelector<HTMLInputElement>("#scale-factor-input");
+const previewScaleButton = document.querySelector<HTMLButtonElement>("#preview-scale");
+
+if (
+  editorPanel &&
+  objectIdInput &&
+  selectButton &&
+  angleInput &&
+  previewButton &&
+  applyButton &&
+  cancelButton &&
+  translateXInput &&
+  translateYInput &&
+  translateZInput &&
+  previewTranslateButton &&
+  scaleFactorInput &&
+  previewScaleButton
+) {
+  if (hasSceneLayerTarget(config)) {
+    const commands = new EditorCommands(config);
+    mountEditor(
+      {
+        panel: editorPanel,
+        objectIdInput,
+        selectButton,
+        angleInput,
+        previewButton,
+        applyButton,
+        cancelButton,
+        translateXInput,
+        translateYInput,
+        translateZInput,
+        previewTranslateButton,
+        scaleFactorInput,
+        previewScaleButton,
+      },
+      commands,
+    );
+    // Milestone 2: expose read tools + propose/discard to a WebMCP-compatible
+    // agent host, sharing this exact `commands` instance with the UI above so
+    // an agent's proposal shows up in the same visible preview a human sees.
+    registerWebMcpTools(commands);
+    if (config.testObjectId !== null) {
+      objectIdInput.value = String(config.testObjectId);
+    }
+    // Quick demo: render the real SceneLayer plus a live-rotating preview
+    // ghost, sharing this exact `commands` instance so the ghost animates on
+    // both a human's Preview click and an agent's `propose_rotation` call.
+    void mountSceneView(sceneEl, config, commands, (message) => setStatus(message));
+  } else {
+    editorPanel.innerHTML =
+      '<p class="empty">No test service configured — set VITE_SCENE_LAYER_URL or VITE_SCENE_LAYER_ITEM_ID to use the editor.</p>';
+    for (const button of [
+      selectButton,
+      previewButton,
+      applyButton,
+      cancelButton,
+      previewTranslateButton,
+      previewScaleButton,
+    ])
+      button.disabled = true;
+    sceneEl?.remove();
+  }
+} else {
+  sceneEl?.remove();
+}

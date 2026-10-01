@@ -103,6 +103,7 @@ export function renderCapabilityReport(container: HTMLElement, report: Capabilit
           <tr><th scope="row">Object id</th><td>${mesh.objectId ?? "(none configured)"}</td></tr>
           <tr><th scope="row">Query succeeded</th><td>${mesh.success === null ? "n/a" : mesh.success ? "yes" : "no"}</td></tr>
           <tr><th scope="row">Mesh returned</th><td>${mesh.hasMesh === null ? "n/a" : mesh.hasMesh ? "yes" : "no"}</td></tr>
+          <tr><th scope="row">Transform attributes present</th><td>${mesh.hasTransformAttributes === null ? "n/a" : mesh.hasTransformAttributes ? "yes" : "no"}</td></tr>
           ${mesh.error ? `<tr><th scope="row">Error</th><td class="support-no">${escapeHtml(mesh.error)}</td></tr>` : ""}
         </tbody>
       </table>

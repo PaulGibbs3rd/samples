@@ -19,22 +19,64 @@
       </calcite-navigation>
 
       <div id="app-layout">
-        <!-- Rendered only when VITE_WEBSCENE_ITEM_ID is configured; see src/main.ts -->
-        <arcgis-scene id="scene-view">
+        <!-- Removed when no test service is configured; see src/arcgis/scene-render.ts -->
+        <arcgis-scene id="scene-view" basemap="topo-3d" ground="world-elevation" viewing-mode="local">
           <arcgis-zoom slot="top-left"></arcgis-zoom>
+          <arcgis-expand slot="top-right">
+            <arcgis-layer-list></arcgis-layer-list>
+          </arcgis-expand>
+          <arcgis-expand slot="top-right">
+            <arcgis-basemap-gallery></arcgis-basemap-gallery>
+          </arcgis-expand>
         </arcgis-scene>
 
-        <section id="capability-panel" aria-label="Capability check">
-          <header>
-            <h2>Capability check</h2>
-            <p id="config-summary" class="config-summary"></p>
-            <button id="run-check" type="button">Run capability check</button>
-            <p id="capability-status" role="status" class="status"></p>
-          </header>
-          <div id="capability-report"></div>
-        </section>
+        <div id="side-panels">
+          <section id="capability-panel" aria-label="Capability check">
+            <header>
+              <h2>Capability check</h2>
+              <p id="config-summary" class="config-summary"></p>
+              <button id="run-check" type="button">Run capability check</button>
+              <p id="capability-status" role="status" class="status"></p>
+            </header>
+            <div id="capability-report"></div>
+          </section>
+
+          <section id="editor-panel" aria-label="3D object editor">
+            <header>
+              <h2>Editor — milestone 1</h2>
+              <div class="editor-controls">
+                <label for="object-id-input">Object id</label>
+                <input id="object-id-input" type="number" step="1" placeholder="1" />
+                <button id="select-object" type="button">Select</button>
+              </div>
+              <div class="editor-controls">
+                <label for="rotate-angle-input">Rotate by (degrees)</label>
+                <input id="rotate-angle-input" type="number" step="1" value="15" />
+                <button id="preview-rotation" type="button" disabled>Preview</button>
+              </div>
+              <div class="editor-controls">
+                <label for="translate-x-input">Translate by dx, dy, dz</label>
+                <input id="translate-x-input" type="number" step="1" value="1" aria-label="dx" />
+                <input id="translate-y-input" type="number" step="1" value="0" aria-label="dy" />
+                <input id="translate-z-input" type="number" step="1" value="0" aria-label="dz" />
+                <button id="preview-translation" type="button" disabled>Preview</button>
+              </div>
+              <div class="editor-controls">
+                <label for="scale-factor-input">Scale by (factor)</label>
+                <input id="scale-factor-input" type="number" step="0.1" min="0.01" value="1.1" />
+                <button id="preview-scale" type="button" disabled>Preview</button>
+              </div>
+              <div class="editor-controls">
+                <button id="apply-rotation" type="button" disabled>Apply</button>
+                <button id="cancel-rotation" type="button" disabled>Cancel</button>
+              </div>
+            </header>
+            <div id="editor-report"></div>
+          </section>
+        </div>
       </div>
     </calcite-shell>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
+
