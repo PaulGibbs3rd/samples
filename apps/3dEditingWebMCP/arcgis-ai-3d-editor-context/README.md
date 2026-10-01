@@ -179,11 +179,13 @@ subscribed to the same `EditorCommands` pub-sub the UI and WebMCP tools already 
 - **Scope decision:** the real SceneLayer-rendered feature is intentionally left visible (solid) underneath the
   translucent ghost during preview, rather than attempting to hide/filter it via `SceneLayerView` — the ghost
   overlay alone satisfies "see the rotation," and hiding the live feature would need a riskier, unverified API.
-- **Known limitation: the real feature's rendering does not visually update after Apply.** 3D Object SceneLayers
-  serve pre-tiled scene-cache nodes from the server; editing the `esri3do_*` attributes (confirmed correct via
-  requery) does not itself invalidate or regenerate those cached tiles client-side, and no client-callable
-  `refresh()`/cache-rebuild method is exposed on `SceneLayer` in this SDK version. The underlying cached scene
-  geometry only reflects an edit after the service's scene cache is rebuilt server-side (out of scope here).
+- **Known limitation (rotation/scale): the real feature's rendering does not visually update after Apply.** 3D
+  Object SceneLayers serve pre-tiled scene-cache nodes from the server; editing the `esri3do_*` attributes
+  (confirmed correct via requery) does not itself invalidate or regenerate those cached tiles client-side, and no
+  client-callable `refresh()`/cache-rebuild method is exposed on `SceneLayer` in this SDK version. The underlying
+  cached scene geometry only reflects an edit after the service's scene cache is rebuilt server-side (out of scope
+  here). **Translation is the exception** — see the `viewing-mode="local"` finding below, which does visually
+  move the real feature (as a flat footprint placeholder) after Apply.
 - **Workaround: the ghost stays visible after a successful Apply, in a distinct color.** Since the real feature
   can't be made to visually update, `scene-preview.ts`'s `syncGhost()` no longer hides the ghost once
   `session.status` leaves `"previewing"`. Instead, once an edit is applied and confirmed by requery, the ghost is
@@ -191,16 +193,27 @@ subscribed to the same `EditorCommands` pub-sub the UI and WebMCP tools already 
   distinct from the amber/translucent `PREVIEW_SYMBOL` used for a pending, unconfirmed preview. This is what lets
   a human visually confirm "the edit took effect" without a server-side cache rebuild. The ghost is cleared again
   only when a different object is selected (or the session returns to a genuinely unedited "selected" state).
-- **Ruled out a client-side fix (live-verified):** the dev console logs an
-  `I3SOverrides unsupported-pcs-edits-in-global-view` warning suggesting "changing the viewing mode to display
-  edits." Setting `<arcgis-scene viewing-mode="local">` does silence that warning, but two things confirm it isn't
-  the real fix: (1) the SDK's `SceneLayer` has no `refresh()` method at all in this version, so there's no API to
-  make an already-rendered feature re-fetch its geometry after an attribute edit regardless of viewing mode; and
-  (2) applying a fresh 60° rotation with `viewing-mode="local"` active produced the same "confirmed by requery"
-  success with **zero visual change** to the rendered shape — while also breaking the ghost preview (a second
-  console warning, `Displaying a mesh with a local vertex space in a view in local viewing mode is not
-  supported`, hides it). The `viewing-mode` change was reverted; the warning is a red herring referring to
-  interactive in-view edit/sketch tools, not `esri3do_*` attribute-driven transforms.
+- **Revisited and corrected for translation (live-verified):** an earlier pass tested only a 60° *rotation* with
+  `<arcgis-scene viewing-mode="local">` active, saw zero visual change, and concluded the `I3SOverrides
+  unsupported-pcs-edits-in-global-view` console warning (which suggests "changing the viewing mode to display
+  edits") was a red herring. Re-testing specifically for **translation** shows that conclusion was incomplete:
+  with `viewing-mode="local"` set, applying a translation (confirmed by requery) now visually moves the real
+  feature to its new location — verified with a full hard page reload (no client cache) showing the feature
+  rendered at the translated coordinates, not the original ones. The FeatureServer's stored 2D polygon geometry
+  tracks `esri3do_ox/oy + esri3do_tx/ty` automatically (`ox=-13619861.77, tx=100` → ring x-centroid
+  `-13619761.77`, and likewise for `oy`/`ty`), and the SDK's local-mode I3SOverrides renders that updated
+  footprint directly — something it refuses to do in the default `global` viewing mode for a projected spatial
+  reference (wkid 102100) layer. Rotation (`esri3do_rdeg/rx/ry/rz`) still shows no visual change either way,
+  since it doesn't affect the 2D footprint the override draws from.
+- **Trade-offs of keeping `viewing-mode="local"` enabled (live-verified, accepted for this POC):** this feature's
+  asset type is `esri3do_type: "3D_shapebuffer"` (a simplified box proxy, not a detailed mesh); in local mode the
+  SDK's edit overlay renders it as a **flat, ground-draped 2D polygon with no height** — the box shape visible in
+  `global` mode is lost, for this feature, whenever local mode is active (not just while it's offset from
+  neutral). Additionally, the ghost-preview mesh (`src/ui/scene-preview.ts` / `src/arcgis/mesh-preview.ts`) no
+  longer renders at all in local mode (console warning: `Displaying a mesh with a local vertex space in a view in
+  local viewing mode is not supported`), so there's no live preview overlay before Apply — only the apply-time
+  success message and the (now-moving) real feature confirm the edit. `index.html` sets `viewing-mode="local"` on
+  `<arcgis-scene>` to prioritize the real feature visually moving after Apply over preview/visual fidelity.
 
 ## Project layout
 
